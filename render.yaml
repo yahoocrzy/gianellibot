@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: discord-clickup-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.7
+      - key: DATABASE_URL
+        fromDatabase:
+          name: clickup-bot-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: clickup-bot-redis
+          property: connectionString
+    healthCheckPath: /health
+    
+databases:
+  - name: clickup-bot-db
+    plan: free
+    databaseName: clickup_bot
+    user: clickup_bot
+
+  - name: clickup-bot-redis
+    type: redis
+    plan: free
