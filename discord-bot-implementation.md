@@ -1227,11 +1227,17 @@ class FinalSetupView(discord.ui.View):
         embed = EmbedFactory.create_success_embed(
             "Setup Complete! 🎉",
             "Your ClickUp integration is now configured.\n\n"
-            "**Next Steps:**\n"
-            "• Use `!help` to see all commands\n"
-            "• Try `!task create` to create your first task\n"
-            "• Use `!ai` for natural language commands\n"
-            "• Set up reaction roles with `!reactionrole`"
+            "**Available Slash Commands:**\n"
+            "• `/task create` - Create a new ClickUp task\n"
+            "• `/task list` - List tasks from a ClickUp list\n"
+            "• `/task update` - Update an existing task\n"
+            "• `/task delete` - Delete a task (with confirmation)\n"
+            "• `/task comment` - Add comments to tasks\n"
+            "• `/task assign` - Assign users to tasks\n\n"
+            "**Getting Started:**\n"
+            "• Type `/task create` to create your first task\n"
+            "• You'll need your ClickUp List ID for most commands\n"
+            "• All commands use modern Discord slash command interface"
         )
         
         await interaction.response.edit_message(embed=embed, view=None)
