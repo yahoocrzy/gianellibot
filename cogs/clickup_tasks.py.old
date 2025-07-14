@@ -120,6 +120,7 @@ class ConfirmDeleteView(discord.ui.View):
         )
 
 class ClickUpTasks(commands.Cog):
+    """DEPRECATED: Use clickup_tasks_enhanced.py instead"""
     """ClickUp task management commands"""
     
     def __init__(self, bot):

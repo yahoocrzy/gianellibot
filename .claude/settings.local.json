@@ -14,7 +14,8 @@
       "Bash(git push:*)",
       "WebFetch(domain:clickup.com)",
       "WebFetch(domain:developer.clickup.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

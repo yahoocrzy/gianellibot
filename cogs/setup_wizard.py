@@ -239,13 +239,39 @@ class SetupWizard(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def clickup_setup(self, interaction: discord.Interaction):
         """Start interactive setup wizard"""
+        # Check if using new workspace system
+        from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+        workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+        
+        if workspaces:
+            # Already using new system
+            embed = EmbedFactory.create_info_embed(
+                "Setup Information",
+                "✅ ClickUp is already configured using the new multi-workspace system!\n\n"
+                f"**Current workspaces:** {len(workspaces)}\n\n"
+                "**Available commands:**\n"
+                "• `/workspace-list` - View all workspaces\n"
+                "• `/workspace-add` - Add another workspace\n"
+                "• `/workspace-switch` - Change default workspace\n"
+                "• `/task-create` - Create tasks with dropdowns\n"
+                "• `/calendar` - View tasks in calendar\n\n"
+                "The old setup wizard is deprecated. Use the workspace commands instead!"
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Show migration message
         embed = EmbedFactory.create_info_embed(
-            "ClickUp Bot Setup Wizard",
-            "Welcome! Let's set up your ClickUp integration.\n\n"
-            "**What you'll need:**\n"
-            "• Your ClickUp API token\n"
-            "• Administrator permissions\n\n"
-            "Ready to begin?"
+            "🆕 New Setup System Available!",
+            "We've upgraded to a new multi-workspace system with better features!\n\n"
+            "**New features:**\n"
+            "• Support for multiple ClickUp workspaces\n"
+            "• Dropdown selections for everything (no more typing IDs!)\n"
+            "• Better security with encrypted tokens\n"
+            "• Calendar views and AI integration\n\n"
+            "**To get started:**\n"
+            "Use `/workspace-add` to add your first workspace.\n\n"
+            "Would you like to use the old setup wizard anyway?"
         )
         
         view = SetupStartView(self.bot, interaction)
