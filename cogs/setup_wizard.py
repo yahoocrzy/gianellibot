@@ -108,55 +108,57 @@ class WorkspaceSelectView(discord.ui.View):
         view = FinalSetupView(self.setup_view)
         await interaction.response.edit_message(embed=embed, view=view)
 
-class ChannelSelectModal(discord.ui.Modal, title="Select Notification Channel"):
+class ChannelSelectView(discord.ui.View):
     def __init__(self, setup_view):
-        super().__init__()
+        super().__init__(timeout=180)
         self.setup_view = setup_view
-    
-    channel_mention = discord.ui.TextInput(
-        label="Channel for ClickUp Notifications",
-        placeholder="#general or channel ID (optional)",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        notification_channel_id = None
+        self.selected_channel_id = None
         
-        if self.channel_mention.value.strip():
-            channel_input = self.channel_mention.value.strip()
+        # Get all text channels in the guild
+        guild = setup_view.ctx.guild
+        text_channels = [ch for ch in guild.channels if isinstance(ch, discord.TextChannel)]
+        
+        if text_channels:
+            # Create dropdown options (Discord limit: 25)
+            options = [discord.SelectOption(
+                label="No notification channel (Skip)",
+                value="none",
+                description="Skip setting up notifications",
+                emoji="⏭️"
+            )]
             
-            # Parse channel mention or ID
-            channel = None
-            if channel_input.startswith('<#') and channel_input.endswith('>'):
-                # Channel mention
-                channel_id = int(channel_input[2:-1])
-                channel = interaction.guild.get_channel(channel_id)
-            elif channel_input.startswith('#'):
-                # Channel name
-                channel_name = channel_input[1:]
-                channel = discord.utils.get(interaction.guild.channels, name=channel_name)
-            else:
-                # Try as channel ID
-                try:
-                    channel_id = int(channel_input)
-                    channel = interaction.guild.get_channel(channel_id)
-                except ValueError:
-                    pass
+            for channel in text_channels[:24]:  # Leave room for "none" option
+                options.append(discord.SelectOption(
+                    label=f"#{channel.name}",
+                    value=str(channel.id),
+                    description=f"Use {channel.name} for notifications",
+                    emoji="📢"
+                ))
             
-            if not channel:
-                await interaction.response.send_message(
-                    "❌ Could not find that channel. Setup will continue without notification channel.",
-                    ephemeral=True
-                )
-            elif not isinstance(channel, discord.TextChannel):
-                await interaction.response.send_message(
-                    "❌ Please select a text channel. Setup will continue without notification channel.",
-                    ephemeral=True
-                )
-            else:
-                notification_channel_id = channel.id
-                self.setup_view.config['notification_channel_id'] = notification_channel_id
+            self.channel_select = discord.ui.Select(
+                placeholder="Choose a channel for ClickUp notifications...",
+                options=options,
+                min_values=1,
+                max_values=1
+            )
+            self.channel_select.callback = self.channel_callback
+            self.add_item(self.channel_select)
+        else:
+            # No text channels found (shouldn't happen, but just in case)
+            self.add_item(discord.ui.Button(
+                label="Continue without notifications",
+                style=discord.ButtonStyle.secondary,
+                custom_id="no_channels"
+            ))
+    
+    async def channel_callback(self, interaction: discord.Interaction):
+        selected_value = self.channel_select.values[0]
+        
+        if selected_value == "none":
+            notification_channel_id = None
+        else:
+            notification_channel_id = int(selected_value)
+            self.setup_view.config['notification_channel_id'] = notification_channel_id
         
         # Complete setup
         await self._complete_setup(interaction, notification_channel_id)
@@ -214,9 +216,15 @@ class FinalSetupView(discord.ui.View):
     
     @discord.ui.button(label="Complete Setup", style=discord.ButtonStyle.success)
     async def complete_setup(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Show channel selection modal
-        modal = ChannelSelectModal(self.setup_view)
-        await interaction.response.send_modal(modal)
+        # Show channel selection dropdown
+        embed = EmbedFactory.create_info_embed(
+            "Select Notification Channel",
+            "Choose a channel where ClickUp notifications will be sent.\n\n"
+            "This is optional - you can skip this step if you don't want notifications."
+        )
+        
+        channel_view = ChannelSelectView(self.setup_view)
+        await interaction.response.edit_message(embed=embed, view=channel_view)
         # This method is no longer used as setup completion is handled in ChannelSelectModal
         pass
 

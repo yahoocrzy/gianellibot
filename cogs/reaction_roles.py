@@ -6,49 +6,51 @@ from repositories.reaction_roles import ReactionRoleRepository
 from utils.embed_factory import EmbedFactory
 from loguru import logger
 
-class ChannelSelectModal(discord.ui.Modal, title="Select Channel for Reaction Roles"):
+class ReactionRoleChannelSelectView(discord.ui.View):
     def __init__(self, setup_callback):
-        super().__init__()
+        super().__init__(timeout=180)
         self.setup_callback = setup_callback
     
-    channel_mention = discord.ui.TextInput(
-        label="Channel",
-        placeholder="#general or channel ID",
-        style=discord.TextStyle.short,
-        required=True
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        channel_input = self.channel_mention.value.strip()
+    def setup_for_guild(self, guild: discord.Guild):
+        """Set up the channel dropdown for the specific guild"""
+        # Get all text channels in the guild
+        text_channels = [ch for ch in guild.channels if isinstance(ch, discord.TextChannel)]
         
-        # Parse channel mention or ID
-        channel = None
-        if channel_input.startswith('<#') and channel_input.endswith('>'):
-            # Channel mention
-            channel_id = int(channel_input[2:-1])
-            channel = interaction.guild.get_channel(channel_id)
-        elif channel_input.startswith('#'):
-            # Channel name
-            channel_name = channel_input[1:]
-            channel = discord.utils.get(interaction.guild.channels, name=channel_name)
-        else:
-            # Try as channel ID
-            try:
-                channel_id = int(channel_input)
-                channel = interaction.guild.get_channel(channel_id)
-            except ValueError:
-                pass
-        
-        if not channel:
-            await interaction.response.send_message(
-                "❌ Could not find that channel. Please use a channel mention (#channel) or channel ID.",
-                ephemeral=True
+        if text_channels:
+            # Create dropdown options (Discord limit: 25)
+            options = []
+            
+            for channel in text_channels[:25]:
+                options.append(discord.SelectOption(
+                    label=f"#{channel.name}",
+                    value=str(channel.id),
+                    description=f"Create reaction roles in {channel.name}",
+                    emoji="🔄"
+                ))
+            
+            self.channel_select = discord.ui.Select(
+                placeholder="Choose a channel for the reaction role message...",
+                options=options,
+                min_values=1,
+                max_values=1
             )
-            return
+            self.channel_select.callback = self.channel_callback
+            self.add_item(self.channel_select)
+        else:
+            # No text channels found (shouldn't happen)
+            self.add_item(discord.ui.Button(
+                label="No text channels available",
+                style=discord.ButtonStyle.secondary,
+                disabled=True
+            ))
+    
+    async def channel_callback(self, interaction: discord.Interaction):
+        channel_id = int(self.channel_select.values[0])
+        channel = interaction.guild.get_channel(channel_id)
         
-        if not isinstance(channel, discord.TextChannel):
+        if not channel or not isinstance(channel, discord.TextChannel):
             await interaction.response.send_message(
-                "❌ Please select a text channel.",
+                "❌ Selected channel is no longer available.",
                 ephemeral=True
             )
             return
@@ -398,9 +400,17 @@ class ReactionRoles(commands.Cog):
             setup_view = ReactionRoleSetupView(channel)
             await setup_view.update_preview(channel_interaction)
         
-        # Show channel selection modal
-        modal = ChannelSelectModal(channel_selected)
-        await interaction.response.send_modal(modal)
+        # Show channel selection dropdown
+        embed = EmbedFactory.create_info_embed(
+            "Reaction Roles Setup",
+            "Choose a channel where the reaction role message will be posted.\n\n"
+            "Users will react to the message in this channel to get roles."
+        )
+        
+        channel_view = ReactionRoleChannelSelectView(channel_selected)
+        channel_view.setup_for_guild(interaction.guild)
+        
+        await interaction.response.send_message(embed=embed, view=channel_view, ephemeral=True)
     
     @app_commands.command(name="reaction-roles-list", description="List all reaction role messages")
     @app_commands.default_permissions(administrator=True)
