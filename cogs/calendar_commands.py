@@ -278,16 +278,7 @@ class CalendarCommands(commands.Cog):
         return None
     
     @app_commands.command(name="calendar", description="View tasks in a calendar format")
-    @app_commands.describe(
-        month="Month to view (1-12)",
-        year="Year to view"
-    )
-    async def calendar_view(
-        self,
-        interaction: discord.Interaction,
-        month: Optional[app_commands.Range[int, 1, 12]] = None,
-        year: Optional[app_commands.Range[int, 2020, 2030]] = None
-    ):
+    async def calendar_view(self, interaction: discord.Interaction):
         """Show tasks in calendar view"""
         api = await self.get_api(interaction.guild_id)
         if not api:
@@ -299,12 +290,106 @@ class CalendarCommands(commands.Cog):
             return
         
         async with api:
-            # Get current date if not specified
-            now = datetime.now()
-            target_month = month or now.month
-            target_year = year or now.year
+            # Show date selection first
+            embed = EmbedFactory.create_info_embed(
+                "📅 Calendar View",
+                "Select the month and year to view:"
+            )
             
-            # Select list
+            class DateSelectView(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=180)
+                    self.month = None
+                    self.year = None
+                    
+                    # Month dropdown
+                    months = [
+                        "January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December"
+                    ]
+                    month_options = []
+                    current_month = datetime.now().month
+                    
+                    for i, month_name in enumerate(months, 1):
+                        month_options.append(
+                            discord.SelectOption(
+                                label=month_name,
+                                value=str(i),
+                                default=(i == current_month),
+                                emoji="📅"
+                            )
+                        )
+                    
+                    month_select = discord.ui.Select(
+                        placeholder="Select month...",
+                        options=month_options,
+                        row=0
+                    )
+                    month_select.callback = self.month_callback
+                    self.add_item(month_select)
+                    
+                    # Year dropdown
+                    current_year = datetime.now().year
+                    year_options = []
+                    
+                    for year in range(current_year - 2, current_year + 3):
+                        year_options.append(
+                            discord.SelectOption(
+                                label=str(year),
+                                value=str(year),
+                                default=(year == current_year),
+                                emoji="📆"
+                            )
+                        )
+                    
+                    year_select = discord.ui.Select(
+                        placeholder="Select year...",
+                        options=year_options,
+                        row=1
+                    )
+                    year_select.callback = self.year_callback
+                    self.add_item(year_select)
+                    
+                    # Continue button
+                    continue_btn = discord.ui.Button(
+                        label="View Calendar",
+                        style=discord.ButtonStyle.success,
+                        row=2,
+                        disabled=True
+                    )
+                    continue_btn.callback = self.continue_callback
+                    self.add_item(continue_btn)
+                    self.continue_button = continue_btn
+                
+                async def month_callback(self, interaction: discord.Interaction):
+                    self.month = int(interaction.data['values'][0])
+                    await self.check_complete(interaction)
+                
+                async def year_callback(self, interaction: discord.Interaction):
+                    self.year = int(interaction.data['values'][0])
+                    await self.check_complete(interaction)
+                
+                async def check_complete(self, interaction: discord.Interaction):
+                    if self.month and self.year:
+                        self.continue_button.disabled = False
+                    await interaction.response.edit_message(view=self)
+                
+                async def continue_callback(self, interaction: discord.Interaction):
+                    self.stop()
+                    await interaction.response.defer()
+            
+            date_view = DateSelectView()
+            await interaction.response.send_message(embed=embed, view=date_view)
+            
+            await date_view.wait()
+            
+            if not date_view.month or not date_view.year:
+                return
+                
+            target_month = date_view.month
+            target_year = date_view.year
+            
+            # Now select list
             list_view = ListSelectView(api)
             await list_view.start(interaction)
             
@@ -352,14 +437,7 @@ class CalendarCommands(commands.Cog):
                 await interaction.edit_original_response(embed=embed, view=None)
     
     @app_commands.command(name="upcoming", description="Show upcoming tasks for the next few days")
-    @app_commands.describe(
-        days="Number of days to look ahead (default: 7)"
-    )
-    async def upcoming_tasks(
-        self,
-        interaction: discord.Interaction,
-        days: Optional[app_commands.Range[int, 1, 30]] = 7
-    ):
+    async def upcoming_tasks(self, interaction: discord.Interaction):
         """Show upcoming tasks"""
         api = await self.get_api(interaction.guild_id)
         if not api:
@@ -371,6 +449,47 @@ class CalendarCommands(commands.Cog):
             return
         
         async with api:
+            # Show days selection first
+            embed = EmbedFactory.create_info_embed(
+                "📅 Upcoming Tasks",
+                "How many days ahead would you like to see?"
+            )
+            
+            class DaysSelectView(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=60)
+                    self.days = None
+                    
+                    options = [
+                        discord.SelectOption(label="Today only", value="1", emoji="📅"),
+                        discord.SelectOption(label="Next 3 days", value="3", emoji="📆"),
+                        discord.SelectOption(label="Next week (7 days)", value="7", emoji="📍", default=True),
+                        discord.SelectOption(label="Next 2 weeks", value="14", emoji="📎"),
+                        discord.SelectOption(label="Next month (30 days)", value="30", emoji="🗓️")
+                    ]
+                    
+                    select = discord.ui.Select(
+                        placeholder="Select time range...",
+                        options=options
+                    )
+                    select.callback = self.select_callback
+                    self.add_item(select)
+                
+                async def select_callback(self, interaction: discord.Interaction):
+                    self.days = int(interaction.data['values'][0])
+                    self.stop()
+                    await interaction.response.defer()
+            
+            days_view = DaysSelectView()
+            await interaction.response.send_message(embed=embed, view=days_view)
+            
+            await days_view.wait()
+            
+            if not days_view.days:
+                return
+                
+            days = days_view.days
+            
             # Select list
             list_view = ListSelectView(api)
             await list_view.start(interaction)
