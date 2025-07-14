@@ -70,7 +70,9 @@ class SpaceSelectView(ClickUpSelectionView):
         try:
             await interaction.response.defer()
             
-            spaces = await self.api.get_spaces(self.workspace_id)
+            # Use the API context manager to ensure proper session handling
+            async with self.api:
+                spaces = await self.api.get_spaces(self.workspace_id)
             
             if not spaces:
                 await interaction.followup.send("No spaces found in this workspace.", ephemeral=True)
@@ -104,7 +106,10 @@ class SpaceSelectView(ClickUpSelectionView):
             
         except Exception as e:
             logger.error(f"Failed to load spaces: {e}")
-            await interaction.followup.send(f"Failed to load spaces: {str(e)}", ephemeral=True)
+            error_msg = "Failed to load spaces. Please check your ClickUp configuration and try again."
+            if "RetryError" in str(e) or "RuntimeError" in str(e):
+                error_msg += "\n\n💡 **Tip:** This might be a network issue. Try running `/clickup-setup` again to refresh your connection."
+            await interaction.followup.send(error_msg, ephemeral=True)
     
     async def space_callback(self, interaction: discord.Interaction):
         self.selected_value = self.space_select.values[0]
@@ -136,9 +141,11 @@ class ListSelectView(ClickUpSelectionView):
         try:
             await interaction.response.defer()
             
-            # Get both folderless lists and lists in folders
-            folderless_lists = await self.api.get_folderless_lists(self.space_id)
-            folders = await self.api.get_folders(self.space_id)
+            # Use the API context manager to ensure proper session handling
+            async with self.api:
+                # Get both folderless lists and lists in folders
+                folderless_lists = await self.api.get_folderless_lists(self.space_id)
+                folders = await self.api.get_folders(self.space_id)
             
             all_lists = []
             
@@ -150,18 +157,18 @@ class ListSelectView(ClickUpSelectionView):
                     'folder': 'No Folder'
                 })
             
-            # Get lists from folders
-            for folder in folders:
-                try:
-                    folder_lists = await self.api.get_lists(folder['id'])
-                    for lst in folder_lists:
-                        all_lists.append({
-                            'id': lst['id'],
-                            'name': lst['name'],
-                            'folder': folder['name']
-                        })
-                except Exception as e:
-                    logger.warning(f"Failed to get lists from folder {folder['id']}: {e}")
+                # Get lists from folders
+                for folder in folders:
+                    try:
+                        folder_lists = await self.api.get_lists(folder['id'])
+                        for lst in folder_lists:
+                            all_lists.append({
+                                'id': lst['id'],
+                                'name': lst['name'],
+                                'folder': folder['name']
+                            })
+                    except Exception as e:
+                        logger.warning(f"Failed to get lists from folder {folder['id']}: {e}")
             
             if not all_lists:
                 await interaction.followup.send("No lists found in this space.", ephemeral=True)
@@ -228,7 +235,9 @@ class TaskSelectView(ClickUpSelectionView):
         try:
             await interaction.response.defer()
             
-            tasks = await self.api.get_tasks(self.list_id)
+            # Use the API context manager to ensure proper session handling
+            async with self.api:
+                tasks = await self.api.get_tasks(self.list_id)
             
             if not tasks:
                 await interaction.followup.send("No tasks found in this list.", ephemeral=True)
@@ -295,7 +304,9 @@ class MemberSelectView(ClickUpSelectionView):
         try:
             await interaction.response.defer()
             
-            members = await self.api.get_members(self.workspace_id)
+            # Use the API context manager to ensure proper session handling
+            async with self.api:
+                members = await self.api.get_members(self.workspace_id)
             
             if not members:
                 await interaction.followup.send("No members found in this workspace.", ephemeral=True)

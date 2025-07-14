@@ -20,28 +20,40 @@ class ClickUpAPI:
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._session:
+        if self._session and not self._session.closed:
             await self._session.close()
+            self._session = None
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     async def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         """Make API request with retry logic"""
         url = f"{self.BASE_URL}/{endpoint}"
         
-        async with self._session.request(method, url, **kwargs) as response:
-            data = await response.json()
-            
-            if response.status == 429:  # Rate limited
-                retry_after = int(response.headers.get("Retry-After", 60))
-                logger.warning(f"Rate limited, waiting {retry_after} seconds")
-                await asyncio.sleep(retry_after)
-                raise Exception("Rate limited")
-            
-            if response.status >= 400:
-                logger.error(f"API error: {response.status} - {data}")
-                raise Exception(f"ClickUp API error: {data}")
-            
-            return data
+        # Ensure session exists and is not closed
+        if not self._session or self._session.closed:
+            logger.warning("Session is closed or None, creating new session")
+            if self._session:
+                await self._session.close()
+            self._session = aiohttp.ClientSession(headers=self.headers)
+        
+        try:
+            async with self._session.request(method, url, **kwargs) as response:
+                data = await response.json()
+                
+                if response.status == 429:  # Rate limited
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    logger.warning(f"Rate limited, waiting {retry_after} seconds")
+                    await asyncio.sleep(retry_after)
+                    raise Exception("Rate limited")
+                
+                if response.status >= 400:
+                    logger.error(f"API error: {response.status} - {data}")
+                    raise Exception(f"ClickUp API error: {data}")
+                
+                return data
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error in ClickUp API request: {e}")
+            raise RuntimeError(f"Network error: {e}")
     
     # Workspace & Teams
     async def get_workspaces(self) -> List[Dict[str, Any]]:
