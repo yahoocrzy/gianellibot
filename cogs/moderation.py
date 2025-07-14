@@ -14,6 +14,11 @@ class PurgeConfirmView(discord.ui.View):
     
     @discord.ui.button(label="Confirm Purge", style=discord.ButtonStyle.danger, emoji="🗑️")
     async def confirm_purge(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Prevent multiple clicks
+        if hasattr(self, '_responded'):
+            return
+            
+        self._responded = True
         self.confirmed = True
         self.stop()
         
@@ -67,6 +72,11 @@ class PurgeConfirmView(discord.ui.View):
     
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel_purge(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Prevent multiple clicks
+        if hasattr(self, '_responded'):
+            return
+            
+        self._responded = True
         self.confirmed = False
         self.stop()
         
@@ -181,20 +191,20 @@ class Moderation(commands.Cog):
             view = PurgeConfirmView(purge_data)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
             
-            # Wait for confirmation
-            await view.wait()
+            # Wait for confirmation with timeout
+            timed_out = await view.wait()
             
-            if not view.confirmed:
+            if timed_out or not view.confirmed:
                 # User didn't confirm or timed out
-                if not view.confirmed:
-                    timeout_embed = EmbedFactory.create_info_embed(
-                        "Purge Timed Out",
-                        "❌ Purge confirmation timed out. No messages were deleted."
-                    )
-                    try:
-                        await interaction.edit_original_response(embed=timeout_embed, view=None)
-                    except:
-                        pass
+                timeout_embed = EmbedFactory.create_info_embed(
+                    "Purge Cancelled" if not timed_out else "Purge Timed Out",
+                    "❌ Purge cancelled. No messages were deleted." if not timed_out else "❌ Purge confirmation timed out. No messages were deleted."
+                )
+                try:
+                    await interaction.edit_original_response(embed=timeout_embed, view=None)
+                except discord.NotFound:
+                    # Message was already edited/deleted
+                    pass
         else:
             # For small amounts, purge immediately
             await interaction.response.defer(ephemeral=True)
