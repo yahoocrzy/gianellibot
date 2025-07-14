@@ -10,6 +10,7 @@ from utils.helpers import get_prefix
 from web_server import create_web_server
 import signal
 import sys
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -65,6 +66,7 @@ class ClickUpBot(commands.Bot):
     
     async def on_ready(self):
         logger.info(f"Bot is ready! Logged in as {self.user}")
+        self.start_time = datetime.utcnow()
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
@@ -81,7 +83,7 @@ class ClickUpBot(commands.Bot):
 def signal_handler(sig, frame):
     """Handle shutdown signals gracefully"""
     logger.info("Received shutdown signal, cleaning up...")
-    asyncio.create_task(bot.close())
+    # Don't create async tasks in signal handlers
     sys.exit(0)
 
 async def main():

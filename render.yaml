@@ -17,14 +17,28 @@ services:
           type: redis
           name: clickup-bot-redis
           property: connectionString
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLAUDE_API_URL
+        value: "https://api.anthropic.com/v1"
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: RENDER
+        value: "true"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: WEB_SERVER_ENABLED
+        value: "true"
     healthCheckPath: /health
+  
+  - type: redis
+    name: clickup-bot-redis
+    plan: free
     
 databases:
   - name: clickup-bot-db
     plan: free
     databaseName: clickup_bot
     user: clickup_bot
-
-  - name: clickup-bot-redis
-    type: redis
-    plan: free
