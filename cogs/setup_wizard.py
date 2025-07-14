@@ -143,9 +143,10 @@ class SetupWizard(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    @commands.hybrid_command(name="setup", description="Start the bot setup wizard")
-    @commands.has_permissions(administrator=True)
-    async def setup(self, ctx: commands.Context):
+    @app_commands.command(name="clickup-setup", description="Start the ClickUp bot setup wizard")
+    @app_commands.describe()
+    @app_commands.default_permissions(administrator=True)
+    async def clickup_setup(self, interaction: discord.Interaction):
         """Start interactive setup wizard"""
         embed = EmbedFactory.create_info_embed(
             "ClickUp Bot Setup Wizard",
@@ -156,14 +157,14 @@ class SetupWizard(commands.Cog):
             "Ready to begin?"
         )
         
-        view = SetupStartView(self.bot, ctx)
-        await ctx.send(embed=embed, view=view)
+        view = SetupStartView(self.bot, interaction)
+        await interaction.response.send_message(embed=embed, view=view)
 
 class SetupStartView(discord.ui.View):
-    def __init__(self, bot, ctx):
+    def __init__(self, bot, interaction):
         super().__init__(timeout=180)
         self.bot = bot
-        self.ctx = ctx
+        self.interaction = interaction
     
     @discord.ui.button(label="Start Setup", style=discord.ButtonStyle.primary)
     async def start_setup(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -172,7 +173,7 @@ class SetupStartView(discord.ui.View):
         config = await repo.get_config(interaction.guild_id)
         
         if config and config.get('setup_complete'):
-            view = ReconfigureView(self.bot, self.ctx)
+            view = ReconfigureView(self.bot, self.interaction)
             embed = EmbedFactory.create_warning_embed(
                 "Existing Configuration Found",
                 "This server already has a ClickUp configuration.\n"
@@ -181,7 +182,7 @@ class SetupStartView(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=view)
         else:
             # Start fresh setup
-            await interaction.response.send_modal(APITokenModal(SetupView(self.bot, self.ctx)))
+            await interaction.response.send_modal(APITokenModal(SetupView(self.bot, self.interaction)))
     
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel_setup(self, interaction: discord.Interaction, button: discord.ui.Button):

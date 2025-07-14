@@ -7,7 +7,9 @@
       "Bash(touch:*)",
       "Bash(python:*)",
       "Bash(ls:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

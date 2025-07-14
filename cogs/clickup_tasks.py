@@ -123,6 +123,8 @@ class ClickUpTasks(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
+        # Add the command group to the bot
+        self.bot.tree.add_command(self.task_group)
     
     async def _get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
         """Get ClickUp API instance for guild"""
@@ -135,13 +137,10 @@ class ClickUpTasks(commands.Cog):
         token = security_service.decrypt(config['clickup_token_encrypted'])
         return ClickUpAPI(token)
     
-    @commands.hybrid_group(name="task", description="Task management commands")
-    async def task(self, ctx: commands.Context):
-        """Task management commands"""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help(ctx.command)
+    # Create an app_commands group for slash commands
+    task_group = app_commands.Group(name="task", description="ClickUp task management commands")
     
-    @task.command(name="create", description="Create a new task")
+    @task_group.command(name="create", description="Create a new task")
     @app_commands.describe(
         name="Task name",
         description="Task description",
@@ -151,7 +150,7 @@ class ClickUpTasks(commands.Cog):
     )
     async def create_task(
         self,
-        ctx: commands.Context,
+        interaction: discord.Interaction,
         name: str,
         description: Optional[str] = None,
         list_id: Optional[str] = None,
@@ -159,9 +158,9 @@ class ClickUpTasks(commands.Cog):
         due_date: Optional[str] = None
     ):
         """Create a new task"""
-        api = await self._get_api(ctx.guild.id)
+        api = await self._get_api(interaction.guild.id)
         if not api:
-            await ctx.send("❌ ClickUp is not configured. Run `!setup` first.")
+            await interaction.response.send_message("❌ ClickUp is not configured. Run `/clickup-setup` first.", ephemeral=True)
             return
         
         async with api:
@@ -176,7 +175,7 @@ class ClickUpTasks(commands.Cog):
                 # Get default list if not provided
                 if not list_id:
                     # This would come from user preferences or server config
-                    await ctx.send("❌ Please provide a list ID or set a default list.")
+                    await interaction.response.send_message("❌ Please provide a list ID or set a default list.", ephemeral=True)
                     return
                 
                 # Create task
@@ -206,11 +205,11 @@ class ClickUpTasks(commands.Cog):
                 
                 # Add task action buttons
                 view = TaskView(task, api)
-                await ctx.send(embed=embed, view=view)
+                await interaction.response.send_message(embed=embed, view=view)
                 
             except Exception as e:
                 logger.error(f"Failed to create task: {e}")
-                await ctx.send(f"❌ Failed to create task: {str(e)}")
+                await interaction.response.send_message(f"❌ Failed to create task: {str(e)}", ephemeral=True)
     
     @task.command(name="list", description="List tasks")
     @app_commands.describe(
