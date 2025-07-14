@@ -23,21 +23,9 @@ class ClickUpTasksEnhanced(commands.Cog):
         self.cache_ttl = 300  # 5 minutes
     
     async def get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance for the guild"""
-        # Try new multi-workspace system first
-        workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
-        if workspace:
-            token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
-            return ClickUpAPI(token)
-        
-        # Fall back to old system
-        config = await ServerConfigRepository.get_server_config(guild_id)
-        if config and config.clickup_token_encrypted:
-            from services.security import decrypt_token
-            token = await decrypt_token(config.clickup_token_encrypted)
-            return ClickUpAPI(token)
-        
-        return None
+        """Get ClickUp API instance for the guild using unified config"""
+        from utils.unified_config import UnifiedConfigManager
+        return await UnifiedConfigManager.get_clickup_api(guild_id)
     
     @app_commands.command(name="task-create", description="Create a new ClickUp task with dropdown selections only")
     async def task_create(self, interaction: discord.Interaction):

@@ -270,12 +270,9 @@ class CalendarCommands(commands.Cog):
         self.bot = bot
     
     async def get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance"""
-        workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
-        if workspace:
-            token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
-            return ClickUpAPI(token)
-        return None
+        """Get ClickUp API instance using unified config"""
+        from utils.unified_config import UnifiedConfigManager
+        return await UnifiedConfigManager.get_clickup_api(guild_id)
     
     @app_commands.command(name="calendar", description="View tasks in a calendar format")
     async def calendar_view(self, interaction: discord.Interaction):
@@ -283,8 +280,20 @@ class CalendarCommands(commands.Cog):
         api = await self.get_api(interaction.guild_id)
         if not api:
             embed = EmbedFactory.create_error_embed(
-                "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
+                "ClickUp Not Configured",
+                "ClickUp hasn't been set up for this server yet."
+            )
+            embed.add_field(
+                name="Quick Setup",
+                value="1. Get your ClickUp API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
+                      "2. Run `/workspace-add` and paste your token\n"
+                      "3. Try `/calendar` again!",
+                inline=False
+            )
+            embed.add_field(
+                name="Need Help?",
+                value="Run `/config-status` to check your configuration health",
+                inline=False
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -442,8 +451,20 @@ class CalendarCommands(commands.Cog):
         api = await self.get_api(interaction.guild_id)
         if not api:
             embed = EmbedFactory.create_error_embed(
-                "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
+                "ClickUp Not Configured",
+                "ClickUp hasn't been set up for this server yet."
+            )
+            embed.add_field(
+                name="Quick Setup",
+                value="1. Get your ClickUp API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
+                      "2. Run `/workspace-add` and paste your token\n"
+                      "3. Try `/calendar` again!",
+                inline=False
+            )
+            embed.add_field(
+                name="Need Help?",
+                value="Run `/config-status` to check your configuration health",
+                inline=False
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
