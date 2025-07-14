@@ -124,16 +124,6 @@ class ClickUpTasks(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    async def cog_load(self):
-        """Called when the cog is loaded"""
-        # Add the command group to the bot tree
-        self.bot.tree.add_command(self.task_group)
-    
-    async def cog_unload(self):
-        """Called when the cog is unloaded"""
-        # Remove the command group from the bot tree
-        self.bot.tree.remove_command(self.task_group.name)
-    
     async def _get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
         """Get ClickUp API instance for guild"""
         repo = ServerConfigRepository()
