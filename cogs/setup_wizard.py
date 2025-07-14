@@ -108,27 +108,84 @@ class WorkspaceSelectView(discord.ui.View):
         view = FinalSetupView(self.setup_view)
         await interaction.response.edit_message(embed=embed, view=view)
 
-class FinalSetupView(discord.ui.View):
+class ChannelSelectModal(discord.ui.Modal, title="Select Notification Channel"):
     def __init__(self, setup_view):
-        super().__init__(timeout=180)
+        super().__init__()
         self.setup_view = setup_view
     
-    @discord.ui.button(label="Complete Setup", style=discord.ButtonStyle.success)
-    async def complete_setup(self, interaction: discord.Interaction, button: discord.ui.Button):
+    channel_mention = discord.ui.TextInput(
+        label="Channel for ClickUp Notifications",
+        placeholder="#general or channel ID (optional)",
+        style=discord.TextStyle.short,
+        required=False
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        notification_channel_id = None
+        
+        if self.channel_mention.value.strip():
+            channel_input = self.channel_mention.value.strip()
+            
+            # Parse channel mention or ID
+            channel = None
+            if channel_input.startswith('<#') and channel_input.endswith('>'):
+                # Channel mention
+                channel_id = int(channel_input[2:-1])
+                channel = interaction.guild.get_channel(channel_id)
+            elif channel_input.startswith('#'):
+                # Channel name
+                channel_name = channel_input[1:]
+                channel = discord.utils.get(interaction.guild.channels, name=channel_name)
+            else:
+                # Try as channel ID
+                try:
+                    channel_id = int(channel_input)
+                    channel = interaction.guild.get_channel(channel_id)
+                except ValueError:
+                    pass
+            
+            if not channel:
+                await interaction.response.send_message(
+                    "❌ Could not find that channel. Setup will continue without notification channel.",
+                    ephemeral=True
+                )
+            elif not isinstance(channel, discord.TextChannel):
+                await interaction.response.send_message(
+                    "❌ Please select a text channel. Setup will continue without notification channel.",
+                    ephemeral=True
+                )
+            else:
+                notification_channel_id = channel.id
+                self.setup_view.config['notification_channel_id'] = notification_channel_id
+        
+        # Complete setup
+        await self._complete_setup(interaction, notification_channel_id)
+    
+    async def _complete_setup(self, interaction: discord.Interaction, notification_channel_id: Optional[int]):
         # Save configuration
         repo = ServerConfigRepository()
         
-        await repo.save_config(
-            interaction.guild_id,
-            encrypted_token=self.setup_view.config['clickup_token'],
-            workspace_id=self.setup_view.config['workspace_id'],
-            setup_complete=True
-        )
+        config_data = {
+            'encrypted_token': self.setup_view.config['clickup_token'],
+            'workspace_id': self.setup_view.config['workspace_id'],
+            'setup_complete': True
+        }
+        
+        if notification_channel_id:
+            config_data['notification_channel_id'] = notification_channel_id
+        
+        await repo.save_config(interaction.guild_id, **config_data)
+        
+        # Create completion message
+        channel_text = ""
+        if notification_channel_id:
+            channel = interaction.guild.get_channel(notification_channel_id)
+            channel_text = f"\n**Notification Channel:** {channel.mention if channel else f'<#{notification_channel_id}>'}"
         
         embed = EmbedFactory.create_success_embed(
             "Setup Complete! 🎉",
-            "Your ClickUp integration is now configured.\n\n"
-            "**Available Slash Commands:**\n"
+            f"Your ClickUp integration is now configured.{channel_text}\n\n"
+            "**Available Commands:**\n"
             "• `/select-list` - Browse and select ClickUp lists with dropdowns\n"
             "• `/task-create` - Create a new ClickUp task\n"
             "• `/task-list` - List tasks from a ClickUp list\n"
@@ -136,13 +193,32 @@ class FinalSetupView(discord.ui.View):
             "• `/task-delete` - Delete a task (with confirmation)\n"
             "• `/task-comment` - Add comments to tasks\n"
             "• `/task-assign` - Assign users to tasks\n\n"
+            "**AI-Powered Commands:**\n"
+            "• `/ai-create-task` - Create tasks using natural language\n"
+            "• `/ai-analyze-tasks` - Get AI analysis and suggestions\n"
+            "• `/ai-task-suggestions` - Get AI suggestions for specific tasks\n\n"
+            "**Other Features:**\n"
+            "• `/reaction-roles-setup` - Set up reaction roles with channel selection\n\n"
             "**Getting Started:**\n"
             "• Use `/select-list` to browse your ClickUp hierarchy and get list IDs\n"
             "• Then use `/task-create` with the list ID to create your first task\n"
-            "• All commands use modern Discord slash command interface with interactive dropdowns"
+            "• Try `/ai-create-task` for natural language task creation!"
         )
         
         await interaction.response.edit_message(embed=embed, view=None)
+
+class FinalSetupView(discord.ui.View):
+    def __init__(self, setup_view):
+        super().__init__(timeout=180)
+        self.setup_view = setup_view
+    
+    @discord.ui.button(label="Complete Setup", style=discord.ButtonStyle.success)
+    async def complete_setup(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Show channel selection modal
+        modal = ChannelSelectModal(self.setup_view)
+        await interaction.response.send_modal(modal)
+        # This method is no longer used as setup completion is handled in ChannelSelectModal
+        pass
 
 class SetupWizard(commands.Cog):
     """Interactive setup wizard for the bot"""
