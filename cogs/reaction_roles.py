@@ -171,9 +171,14 @@ class ReactionRoleSetupView(discord.ui.View):
             embed.add_field(name="Role Assignments", value="None - Add roles using the button below", inline=False)
         
         try:
-            await interaction.edit_original_response(embed=embed, view=self)
-        except:
+            # Try to edit the original response first
             await interaction.response.edit_message(embed=embed, view=self)
+        except discord.InteractionResponded:
+            # If already responded, edit the original response
+            await interaction.edit_original_response(embed=embed, view=self)
+        except Exception as e:
+            # Fallback - send a new message
+            await interaction.followup.send(embed=embed, view=self, ephemeral=True)
 
 class SetTitleModal(discord.ui.Modal, title="Set Message Title"):
     def __init__(self, setup_view):
@@ -398,7 +403,17 @@ class ReactionRoles(commands.Cog):
         async def channel_selected(channel_interaction: discord.Interaction, channel: discord.TextChannel):
             # Start the setup process
             setup_view = ReactionRoleSetupView(channel)
-            await setup_view.update_preview(channel_interaction)
+            
+            embed = EmbedFactory.create_info_embed(
+                "Reaction Roles Setup",
+                f"**Channel:** {channel.mention}\n"
+                f"**Title:** {setup_view.message_title}\n"
+                f"**Description:** {setup_view.message_description}\n\n"
+                f"**Roles ({len(setup_view.roles_data)}):**"
+            )
+            embed.add_field(name="Role Assignments", value="None - Add roles using the button below", inline=False)
+            
+            await channel_interaction.response.edit_message(embed=embed, view=setup_view)
         
         # Show channel selection dropdown
         embed = EmbedFactory.create_info_embed(
