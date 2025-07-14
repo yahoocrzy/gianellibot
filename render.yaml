@@ -3,7 +3,10 @@ services:
     name: discord-clickup-bot
     runtime: python
     plan: free
-    buildCommand: python -m pip install --upgrade pip setuptools wheel && pip install --prefer-binary -r requirements.txt
+    buildCommand: |
+      python -m pip install --upgrade pip setuptools wheel
+      pip install --no-cache-dir --only-binary=:all: discord.py python-dotenv psycopg2-binary pydantic fastapi uvicorn loguru click tenacity redis aiosqlite
+      pip install --no-cache-dir --prefer-binary aiohttp cryptography asyncpg sqlalchemy alembic
     startCommand: python main.py
     envVars:
       - key: PYTHON_VERSION
