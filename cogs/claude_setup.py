@@ -28,13 +28,10 @@ class ClaudeAPIModal(discord.ui.Modal, title="Claude AI Setup"):
         try:
             # Test the API key
             test_api = ClaudeAPI(self.api_key.value)
-            test_message = await test_api.create_message(
-                "Hello! Please respond with 'API key validated successfully' if you receive this.",
-                max_tokens=50
-            )
+            is_valid = await test_api.test_connection()
             
-            if not test_message:
-                raise Exception("No response from Claude API")
+            if not is_valid:
+                raise Exception("Invalid API key or Claude API is unreachable")
             
             # Save the configuration
             config = await ClaudeConfigRepository.create_or_update_config(
@@ -319,12 +316,9 @@ class ClaudeSetup(commands.Cog):
             api = ClaudeAPI(api_key)
             
             # Quick test
-            test_response = await api.create_message(
-                "Respond with 'OK' if you receive this.",
-                max_tokens=10
-            )
+            is_working = await api.test_connection()
             
-            if test_response:
+            if is_working:
                 embed.add_field(
                     name="API Status",
                     value="✅ API connection is working",
@@ -333,7 +327,7 @@ class ClaudeSetup(commands.Cog):
             else:
                 embed.add_field(
                     name="API Status",
-                    value="⚠️ API returned no response",
+                    value="⚠️ API connection failed",
                     inline=False
                 )
                 

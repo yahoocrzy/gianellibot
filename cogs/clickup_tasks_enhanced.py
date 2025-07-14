@@ -39,19 +39,8 @@ class ClickUpTasksEnhanced(commands.Cog):
         
         return None
     
-    @app_commands.command(name="task-create", description="Create a new ClickUp task with interactive selections")
-    @app_commands.describe(
-        name="Name of the task",
-        description="Task description (optional)",
-        due_date="Due date (e.g., '2d', 'tomorrow', '2024-12-31')"
-    )
-    async def task_create(
-        self,
-        interaction: discord.Interaction,
-        name: str,
-        description: Optional[str] = None,
-        due_date: Optional[str] = None
-    ):
+    @app_commands.command(name="task-create", description="Create a new ClickUp task with dropdown selections only")
+    async def task_create(self, interaction: discord.Interaction):
         """Create a task with full dropdown support"""
         # Check if configured
         api = await self.get_api(interaction.guild_id)
@@ -105,7 +94,7 @@ class ClickUpTasksEnhanced(commands.Cog):
             # Show list selection
             embed = EmbedFactory.create_info_embed(
                 "Select List",
-                f"Where should I create the task: **{name}**?"
+                f"Where should I create the task: **{selected_name}**?"
             )
             
             class ListSelect(discord.ui.View):
@@ -225,8 +214,8 @@ class ClickUpTasksEnhanced(commands.Cog):
                 
                 # Create task
                 task_data = {
-                    "name": name,
-                    "description": description or "",
+                    "name": selected_name,
+                    "description": selected_description,
                     "priority": {"priority": priority_view.selected_priority} if priority_view.selected_priority else None,
                     "due_date": due_date_unix,
                     "assignees": assignee_ids
@@ -237,7 +226,7 @@ class ClickUpTasksEnhanced(commands.Cog):
                 # Success embed
                 embed = EmbedFactory.create_success_embed(
                     "Task Created Successfully",
-                    f"✅ Created task: **{name}**"
+                    f"✅ Created task: **{selected_name}**"
                 )
                 
                 embed.add_field(name="List", value=list_select.selected_list['name'], inline=True)
@@ -269,17 +258,8 @@ class ClickUpTasksEnhanced(commands.Cog):
             )
             await interaction.followup.send(embed=embed)
     
-    @app_commands.command(name="task-update", description="Update an existing task with dropdowns")
-    @app_commands.describe(
-        new_name="New name for the task",
-        new_description="New description"
-    )
-    async def task_update(
-        self,
-        interaction: discord.Interaction,
-        new_name: Optional[str] = None,
-        new_description: Optional[str] = None
-    ):
+    @app_commands.command(name="task-update", description="Update an existing task with dropdown selections only")
+    async def task_update(self, interaction: discord.Interaction):
         """Update a task with full dropdown support"""
         api = await self.get_api(interaction.guild_id)
         if not api:
@@ -366,13 +346,158 @@ class ClickUpTasksEnhanced(commands.Cog):
                 await interaction.edit_original_response(embed=embed, view=None)
                 return
             
+            # Show update options selection first
+            embed = EmbedFactory.create_info_embed(
+                "Task Update Options",
+                "What would you like to update for this task?"
+            )
+            
+            class UpdateOptionsSelect(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=300)
+                    self.update_name = False
+                    self.update_desc = False
+                    self.selected_name = None
+                    self.selected_desc = None
+                
+                @discord.ui.button(label="Update Name", style=discord.ButtonStyle.primary)
+                async def update_name_btn(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                    self.update_name = True
+                    button.style = discord.ButtonStyle.success
+                    await button_interaction.response.edit_message(view=self)
+                
+                @discord.ui.button(label="Update Description", style=discord.ButtonStyle.primary)
+                async def update_desc_btn(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                    self.update_desc = True
+                    button.style = discord.ButtonStyle.success
+                    await button_interaction.response.edit_message(view=self)
+                
+                @discord.ui.button(label="Continue", style=discord.ButtonStyle.success, row=1)
+                async def continue_btn(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                    if not self.update_name and not self.update_desc and not update_choice.update_status and not update_choice.update_priority and not update_choice.update_assignee:
+                        await button_interaction.response.send_message("Please select at least one field to update.", ephemeral=True)
+                        return
+                    self.stop()
+                    await button_interaction.response.defer_update()
+            
+            update_opts = UpdateOptionsSelect()
+            await interaction.edit_original_response(embed=embed, view=update_opts)
+            
+            timed_out = await update_opts.wait()
+            if timed_out:
+                embed = EmbedFactory.create_error_embed("Timeout", "Update options selection timed out.")
+                await interaction.edit_original_response(embed=embed, view=None)
+                return
+            
             # Collect updates
             updates = {}
             
-            if new_name:
-                updates['name'] = new_name
-            if new_description is not None:
-                updates['description'] = new_description
+            # Handle name update with dropdown
+            if update_opts.update_name:
+                embed = EmbedFactory.create_info_embed(
+                    "Select New Name",
+                    "Choose a new name for the task:"
+                )
+                
+                class NameSelect(discord.ui.View):
+                    def __init__(self):
+                        super().__init__(timeout=300)
+                        self.selected_name = None
+                        
+                        name_options = [
+                            "Fix critical bug", "Implement new feature", "Update documentation",
+                            "Refactor code", "Add unit tests", "Optimize performance",
+                            "Security update", "UI improvements", "Database migration",
+                            "Deploy to production", "Code review", "Bug investigation",
+                            "Feature enhancement", "System maintenance", "User research"
+                        ]
+                        
+                        options = []
+                        for name in name_options:
+                            options.append(
+                                discord.SelectOption(
+                                    label=name,
+                                    value=name,
+                                    description="Select this name"
+                                )
+                            )
+                        
+                        select = discord.ui.Select(
+                            placeholder="Choose a new task name...",
+                            options=options
+                        )
+                        select.callback = self.name_callback
+                        self.add_item(select)
+                    
+                    async def name_callback(self, select_interaction: discord.Interaction):
+                        self.selected_name = select_interaction.data['values'][0]
+                        self.stop()
+                        await select_interaction.response.defer_update()
+                
+                name_view = NameSelect()
+                await interaction.edit_original_response(embed=embed, view=name_view)
+                
+                timed_out = await name_view.wait()
+                if not timed_out and name_view.selected_name:
+                    updates['name'] = name_view.selected_name
+            
+            # Handle description update with dropdown
+            if update_opts.update_desc:
+                embed = EmbedFactory.create_info_embed(
+                    "Select New Description",
+                    "Choose a new description for the task:"
+                )
+                
+                class DescSelect(discord.ui.View):
+                    def __init__(self):
+                        super().__init__(timeout=300)
+                        self.selected_desc = None
+                        
+                        desc_options = [
+                            "High priority task requiring immediate attention",
+                            "Standard maintenance and improvement work",
+                            "Customer-requested feature enhancement",
+                            "Bug fix to improve system stability",
+                            "Documentation update for better clarity",
+                            "Performance optimization work",
+                            "Security enhancement and hardening",
+                            "User experience improvement",
+                            "Infrastructure and deployment task",
+                            "Research and analysis work",
+                            "Testing and quality assurance",
+                            "No description needed"
+                        ]
+                        
+                        options = []
+                        for desc in desc_options:
+                            options.append(
+                                discord.SelectOption(
+                                    label=desc[:100],
+                                    value=desc,
+                                    description="Select this description"
+                                )
+                            )
+                        
+                        select = discord.ui.Select(
+                            placeholder="Choose a new description...",
+                            options=options
+                        )
+                        select.callback = self.desc_callback
+                        self.add_item(select)
+                    
+                    async def desc_callback(self, select_interaction: discord.Interaction):
+                        self.selected_desc = select_interaction.data['values'][0]
+                        if self.selected_desc == "No description needed":
+                            self.selected_desc = ""
+                        self.stop()
+                        await select_interaction.response.defer_update()
+                
+                desc_view = DescSelect()
+                await interaction.edit_original_response(embed=embed, view=desc_view)
+                
+                timed_out = await desc_view.wait()
+                if not timed_out and desc_view.selected_desc is not None:
+                    updates['description'] = desc_view.selected_desc
             
             # Status update
             if update_choice.update_status:
