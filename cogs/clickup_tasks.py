@@ -211,7 +211,7 @@ class ClickUpTasks(commands.Cog):
                 logger.error(f"Failed to create task: {e}")
                 await interaction.response.send_message(f"❌ Failed to create task: {str(e)}", ephemeral=True)
     
-    @task.command(name="list", description="List tasks")
+    @task_group.command(name="list", description="List tasks")
     @app_commands.describe(
         list_id="List ID to fetch tasks from",
         status="Filter by status",
@@ -219,15 +219,15 @@ class ClickUpTasks(commands.Cog):
     )
     async def list_tasks(
         self,
-        ctx: commands.Context,
+        interaction: discord.Interaction,
         list_id: str,
         status: Optional[str] = None,
         assignee: Optional[discord.Member] = None
     ):
         """List tasks from a list"""
-        api = await self._get_api(ctx.guild.id)
+        api = await self._get_api(interaction.guild.id)
         if not api:
-            await ctx.send("❌ ClickUp is not configured. Run `!setup` first.")
+            await interaction.response.send_message("❌ ClickUp is not configured. Run `/clickup-setup` first.", ephemeral=True)
             return
         
         async with api:
@@ -242,7 +242,7 @@ class ClickUpTasks(commands.Cog):
                 tasks = await api.get_tasks(list_id, **params)
                 
                 if not tasks:
-                    await ctx.send("No tasks found.")
+                    await interaction.response.send_message("No tasks found.", ephemeral=True)
                     return
                 
                 # Create paginated embed
@@ -271,13 +271,13 @@ class ClickUpTasks(commands.Cog):
                 if len(tasks) > 10:
                     embed.set_footer(text=f"Showing 10 of {len(tasks)} tasks")
                 
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 
             except Exception as e:
                 logger.error(f"Failed to list tasks: {e}")
-                await ctx.send(f"❌ Failed to list tasks: {str(e)}")
+                await interaction.response.send_message(f"❌ Failed to list tasks: {str(e)}", ephemeral=True)
     
-    @task.command(name="update", description="Update a task")
+    @task_group.command(name="update", description="Update a task")
     @app_commands.describe(
         task_id="Task ID to update",
         name="New task name",
@@ -287,7 +287,7 @@ class ClickUpTasks(commands.Cog):
     )
     async def update_task(
         self,
-        ctx: commands.Context,
+        interaction: discord.Interaction,
         task_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -295,9 +295,9 @@ class ClickUpTasks(commands.Cog):
         priority: Optional[int] = None
     ):
         """Update an existing task"""
-        api = await self._get_api(ctx.guild.id)
+        api = await self._get_api(interaction.guild.id)
         if not api:
-            await ctx.send("❌ ClickUp is not configured. Run `!setup` first.")
+            await interaction.response.send_message("❌ ClickUp is not configured. Run `/clickup-setup` first.", ephemeral=True)
             return
         
         async with api:
@@ -321,24 +321,24 @@ class ClickUpTasks(commands.Cog):
                 embed.add_field(name="ID", value=task['id'], inline=True)
                 embed.add_field(name="Status", value=task['status']['status'], inline=True)
                 
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 
             except Exception as e:
                 logger.error(f"Failed to update task: {e}")
-                await ctx.send(f"❌ Failed to update task: {str(e)}")
+                await interaction.response.send_message(f"❌ Failed to update task: {str(e)}")
     
-    @task.command(name="delete", description="Delete a task")
+    @task_group.command(name="delete", description="Delete a task")
     @app_commands.describe(task_id="Task ID to delete")
-    async def delete_task(self, ctx: commands.Context, task_id: str):
+    async def delete_task(self, interaction: discord.Interaction, task_id: str):
         """Delete a task"""
-        api = await self._get_api(ctx.guild.id)
+        api = await self._get_api(interaction.guild.id)
         if not api:
-            await ctx.send("❌ ClickUp is not configured. Run `!setup` first.")
+            await interaction.response.send_message("❌ ClickUp is not configured. Run `/clickup-setup` first.", ephemeral=True)
             return
         
         # Confirmation view
         view = ConfirmView()
-        await ctx.send(
+        await interaction.response.send_message(
             f"⚠️ Are you sure you want to delete task `{task_id}`?",
             view=view
         )
@@ -349,23 +349,23 @@ class ClickUpTasks(commands.Cog):
             async with api:
                 try:
                     await api.delete_task(task_id)
-                    await ctx.send(f"✅ Task `{task_id}` has been deleted.")
+                    await interaction.followup.send(f"✅ Task `{task_id}` has been deleted.")
                 except Exception as e:
                     logger.error(f"Failed to delete task: {e}")
-                    await ctx.send(f"❌ Failed to delete task: {str(e)}")
+                    await interaction.followup.send(f"❌ Failed to delete task: {str(e)}")
         else:
-            await ctx.send("Task deletion cancelled.")
+            await interaction.followup.send("Task deletion cancelled.")
     
-    @task.command(name="comment", description="Add a comment to a task")
+    @task_group.command(name="comment", description="Add a comment to a task")
     @app_commands.describe(
         task_id="Task ID to comment on",
         comment="Comment text"
     )
-    async def add_comment(self, ctx: commands.Context, task_id: str, *, comment: str):
+    async def add_comment(self, interaction: discord.Interaction, task_id: str, *, comment: str):
         """Add a comment to a task"""
-        api = await self._get_api(ctx.guild.id)
+        api = await self._get_api(interaction.guild.id)
         if not api:
-            await ctx.send("❌ ClickUp is not configured. Run `!setup` first.")
+            await interaction.response.send_message("❌ ClickUp is not configured. Run `/clickup-setup` first.", ephemeral=True)
             return
         
         async with api:
@@ -376,30 +376,27 @@ class ClickUpTasks(commands.Cog):
                     notify_all=False
                 )
                 
-                await ctx.send(f"✅ Comment added to task `{task_id}`")
+                await interaction.response.send_message(f"✅ Comment added to task `{task_id}`")
                 
             except Exception as e:
                 logger.error(f"Failed to add comment: {e}")
-                await ctx.send(f"❌ Failed to add comment: {str(e)}")
+                await interaction.response.send_message(f"❌ Failed to add comment: {str(e)}")
     
-    @task.command(name="assign", description="Assign users to a task")
+    @task_group.command(name="assign", description="Assign users to a task")
     @app_commands.describe(
-        task_id="Task ID to assign users to",
-        users="Discord users to assign (mentions)"
+        task_id="Task ID to assign user to",
+        user="Discord user to assign"
     )
-    async def assign_task(self, ctx: commands.Context, task_id: str, users: commands.Greedy[discord.Member]):
-        """Assign users to a task"""
-        if not users:
-            await ctx.send("❌ Please mention at least one user to assign.")
-            return
+    async def assign_task(self, interaction: discord.Interaction, task_id: str, user: discord.Member):
+        """Assign a user to a task"""
         
-        api = await self._get_api(ctx.guild.id)
+        api = await self._get_api(interaction.guild.id)
         if not api:
-            await ctx.send("❌ ClickUp is not configured. Run `!setup` first.")
+            await interaction.response.send_message("❌ ClickUp is not configured. Run `/clickup-setup` first.", ephemeral=True)
             return
         
         # Note: You would need to implement Discord -> ClickUp user mapping
-        await ctx.send("⚠️ User mapping between Discord and ClickUp is not yet implemented.")
+        await interaction.response.send_message("⚠️ User mapping between Discord and ClickUp is not yet implemented.")
 
 class ConfirmView(discord.ui.View):
     def __init__(self):
