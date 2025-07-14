@@ -31,3 +31,12 @@ class SecurityService:
             raise
 
 security_service = SecurityService()
+
+# Convenience functions for backward compatibility
+async def encrypt_token(token: str) -> str:
+    """Encrypt a token using the security service"""
+    return security_service.encrypt(token)
+
+async def decrypt_token(encrypted_token: str) -> str:
+    """Decrypt a token using the security service"""
+    return security_service.decrypt(encrypted_token)
