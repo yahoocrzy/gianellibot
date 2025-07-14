@@ -192,45 +192,11 @@ class AICreateTaskView(discord.ui.View):
         await interaction.response.edit_message(view=self)
     
     async def continue_callback(self, interaction: discord.Interaction):
-        """Open modal for task details"""
-        modal = TaskDetailsModal(self.task_type, self.priority, self.due_option)
-        await interaction.response.send_modal(modal)
+        """Continue to task name selection"""
         self.stop()
+        await interaction.response.defer_update()
 
 
-class TaskDetailsModal(discord.ui.Modal, title="Task Details"):
-    """Modal for entering task name and description"""
-    
-    def __init__(self, task_type: str, priority: str, due_option: str):
-        super().__init__()
-        self.task_type = task_type
-        self.priority = priority
-        self.due_option = due_option
-        
-        # Task name input
-        self.name = discord.ui.TextInput(
-            label=f"Name your {task_type}",
-            placeholder=f"Enter a brief name for this {task_type}...",
-            max_length=100,
-            required=True
-        )
-        self.add_item(self.name)
-        
-        # Description input
-        self.description = discord.ui.TextInput(
-            label="Description (optional)",
-            placeholder="Add any additional details...",
-            style=discord.TextStyle.paragraph,
-            max_length=1000,
-            required=False
-        )
-        self.add_item(self.description)
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        """Store the task details"""
-        self.task_name = self.name.value
-        self.task_description = self.description.value
-        await interaction.response.defer()
 
 
 class AICompleteDropdown(commands.Cog):

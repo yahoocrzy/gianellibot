@@ -53,11 +53,8 @@ class WorkspaceManagement(commands.Cog):
         self.bot = bot
     
     @app_commands.command(name="workspace-add", description="Add a new ClickUp workspace")
-    @app_commands.describe(
-        token="ClickUp API token for the workspace (will be encrypted)"
-    )
     @app_commands.default_permissions(administrator=True)
-    async def workspace_add(self, interaction: discord.Interaction, token: str):
+    async def workspace_add(self, interaction: discord.Interaction):
         """Add a new ClickUp workspace to the server"""
         await interaction.response.defer(ephemeral=True)
         
