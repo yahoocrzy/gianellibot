@@ -61,16 +61,79 @@ class ClickUpTasksEnhanced(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         
+        # Defer immediately
+        await interaction.response.defer(ephemeral=True)
+        
         async with api:
-            # Step 1: Select list
-            list_view = ListSelectView(api)
-            await list_view.start(interaction)
+            # Get workspace and lists quickly
+            workspaces = await api.get_workspaces()
+            if not workspaces:
+                embed = EmbedFactory.create_error_embed(
+                    "No Workspaces",
+                    "No workspaces found."
+                )
+                await interaction.followup.send(embed=embed)
+                return
             
-            # Wait for list selection
-            await list_view.wait()
+            # Quick list selection
+            workspace_id = workspaces[0]['id']
+            spaces = await api.get_spaces(workspace_id)
             
-            if not list_view.selected_list_id:
-                return  # User cancelled
+            all_lists = []
+            for space in spaces[:3]:
+                lists = await api.get_lists(space['id'])
+                for lst in lists:
+                    lst['space_name'] = space['name']
+                    all_lists.append(lst)
+            
+            if not all_lists:
+                embed = EmbedFactory.create_error_embed(
+                    "No Lists",
+                    "No lists found. Please create a list in ClickUp first."
+                )
+                await interaction.followup.send(embed=embed)
+                return
+            
+            # Show list selection
+            embed = EmbedFactory.create_info_embed(
+                "Select List",
+                f"Where should I create the task: **{name}**?"
+            )
+            
+            class ListSelect(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=180)
+                    self.selected_list = None
+                    
+                    options = []
+                    for lst in all_lists[:25]:
+                        options.append(
+                            discord.SelectOption(
+                                label=lst['name'],
+                                value=lst['id'],
+                                description=f"Space: {lst.get('space_name', 'Unknown')}"
+                            )
+                        )
+                    
+                    select = discord.ui.Select(
+                        placeholder="Choose a list...",
+                        options=options
+                    )
+                    select.callback = self.select_callback
+                    self.add_item(select)
+                
+                async def select_callback(self, select_interaction: discord.Interaction):
+                    self.selected_list = next((l for l in all_lists if l['id'] == select_interaction.data['values'][0]), None)
+                    self.stop()
+                    await select_interaction.response.defer()
+            
+            list_select = ListSelect()
+            await interaction.followup.send(embed=embed, view=list_select)
+            
+            await list_select.wait()
+            
+            if not list_select.selected_list:
+                return
             
             # Step 2: Select priority
             embed = EmbedFactory.create_info_embed(
@@ -153,7 +216,7 @@ class ClickUpTasksEnhanced(commands.Cog):
                     "assignees": assignee_ids
                 }
                 
-                result = await api.create_task(list_view.selected_list_id, **task_data)
+                result = await api.create_task(list_select.selected_list['id'], **task_data)
                 
                 # Success embed
                 embed = EmbedFactory.create_success_embed(
@@ -161,7 +224,7 @@ class ClickUpTasksEnhanced(commands.Cog):
                     f"✅ Created task: **{name}**"
                 )
                 
-                embed.add_field(name="List", value=list_view.selected_list_name, inline=True)
+                embed.add_field(name="List", value=list_select.selected_list['name'], inline=True)
                 embed.add_field(name="Priority", value=priority_view.selected_priority.title(), inline=True)
                 
                 if assignee_ids:
@@ -352,30 +415,116 @@ class ClickUpTasksEnhanced(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         
+        # Defer immediately since list selection takes time
+        await interaction.response.defer(ephemeral=True)
+        
         async with api:
-            # Select list
-            list_view = ListSelectView(api)
-            await list_view.start(interaction)
+            # Get workspaces first
+            workspaces = await api.get_workspaces()
+            if not workspaces:
+                embed = EmbedFactory.create_error_embed(
+                    "No Workspaces",
+                    "No workspaces found. Please check your configuration."
+                )
+                await interaction.followup.send(embed=embed)
+                return
             
-            await list_view.wait()
-            
-            if not list_view.selected_list_id:
+            # For single workspace, skip to space selection
+            if len(workspaces) == 1:
+                workspace_id = workspaces[0]['id']
+                
+                # Get spaces
+                spaces = await api.get_spaces(workspace_id)
+                if not spaces:
+                    embed = EmbedFactory.create_error_embed(
+                        "No Spaces",
+                        "No spaces found in workspace."
+                    )
+                    await interaction.followup.send(embed=embed)
+                    return
+                
+                # Get all lists from all spaces for quick selection
+                all_lists = []
+                for space in spaces[:3]:  # Limit to avoid timeout
+                    lists = await api.get_lists(space['id'])
+                    for lst in lists:
+                        lst['space_name'] = space['name']
+                        all_lists.append(lst)
+                
+                if not all_lists:
+                    embed = EmbedFactory.create_error_embed(
+                        "No Lists",
+                        "No lists found in any space."
+                    )
+                    await interaction.followup.send(embed=embed)
+                    return
+                
+                # Show list selection
+                embed = EmbedFactory.create_info_embed(
+                    "Select List",
+                    "Choose a list to view tasks:"
+                )
+                
+                class QuickListSelect(discord.ui.View):
+                    def __init__(self):
+                        super().__init__(timeout=180)
+                        self.selected_list = None
+                        
+                        options = []
+                        for lst in all_lists[:25]:
+                            options.append(
+                                discord.SelectOption(
+                                    label=lst['name'],
+                                    value=lst['id'],
+                                    description=f"Space: {lst.get('space_name', 'Unknown')}"
+                                )
+                            )
+                        
+                        select = discord.ui.Select(
+                            placeholder="Choose a list...",
+                            options=options
+                        )
+                        select.callback = self.select_callback
+                        self.add_item(select)
+                    
+                    async def select_callback(self, select_interaction: discord.Interaction):
+                        self.selected_list = next((l for l in all_lists if l['id'] == select_interaction.data['values'][0]), None)
+                        self.stop()
+                        await select_interaction.response.defer()
+                
+                list_select = QuickListSelect()
+                await interaction.followup.send(embed=embed, view=list_select)
+                
+                await list_select.wait()
+                
+                if not list_select.selected_list:
+                    return
+                
+                selected_list = list_select.selected_list
+            else:
+                # Multiple workspaces - need full selection flow
+                # This would need to be implemented with proper multi-step selection
+                embed = EmbedFactory.create_error_embed(
+                    "Multiple Workspaces",
+                    "Please use `/workspace-switch` to set a default workspace first."
+                )
+                await interaction.followup.send(embed=embed)
                 return
             
             # Fetch tasks
             embed = EmbedFactory.create_info_embed(
                 "Loading Tasks",
-                f"⏳ Loading tasks from **{list_view.selected_list_name}**..."
+                f"⏳ Loading tasks from **{selected_list['name']}**..."
             )
             await interaction.edit_original_response(embed=embed, view=None)
             
             try:
-                tasks = await api.get_tasks(list_view.selected_list_id)
+                tasks = await api.get_tasks(selected_list['id'])
                 
                 if not tasks:
                     embed = EmbedFactory.create_info_embed(
                         "No Tasks",
-                        f"No tasks found in **{list_view.selected_list_name}**"
+                        f"No tasks found in **{selected_list['name']}**"
                     )
                     await interaction.edit_original_response(embed=embed)
                     return
@@ -390,7 +539,7 @@ class ClickUpTasksEnhanced(commands.Cog):
                 
                 # Create embed
                 embed = EmbedFactory.create_info_embed(
-                    f"Tasks in {list_view.selected_list_name}",
+                    f"Tasks in {selected_list['name']}",
                     f"Found **{len(tasks)}** task(s)"
                 )
                 
