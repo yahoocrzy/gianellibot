@@ -19,7 +19,7 @@ class SetupView(discord.ui.View):
         
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Ensure only the command author can interact"""
-        if interaction.user.id != self.ctx.author.id:
+        if interaction.user.id != self.ctx.user.id:
             await interaction.response.send_message(
                 "Only the person who started setup can interact with this menu.",
                 ephemeral=True
@@ -109,13 +109,13 @@ class WorkspaceSelectView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view)
 
 class ChannelSelectView(discord.ui.View):
-    def __init__(self, setup_view):
+    def __init__(self, setup_view, guild):
         super().__init__(timeout=180)
         self.setup_view = setup_view
+        self.guild = guild
         self.selected_channel_id = None
         
         # Get all text channels in the guild
-        guild = setup_view.ctx.guild
         text_channels = [ch for ch in guild.channels if isinstance(ch, discord.TextChannel)]
         
         if text_channels:
@@ -223,7 +223,7 @@ class FinalSetupView(discord.ui.View):
             "This is optional - you can skip this step if you don't want notifications."
         )
         
-        channel_view = ChannelSelectView(self.setup_view)
+        channel_view = ChannelSelectView(self.setup_view, interaction.guild)
         await interaction.response.edit_message(embed=embed, view=channel_view)
         # This method is no longer used as setup completion is handled in ChannelSelectModal
         pass
@@ -291,7 +291,7 @@ class ReconfigureView(discord.ui.View):
     
     @discord.ui.button(label="Reconfigure", style=discord.ButtonStyle.danger)
     async def reconfigure(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(APITokenModal(SetupView(self.bot, self.ctx)))
+        await interaction.response.send_modal(APITokenModal(SetupView(self.bot, interaction)))
     
     @discord.ui.button(label="Keep Current", style=discord.ButtonStyle.secondary)
     async def keep_current(self, interaction: discord.Interaction, button: discord.ui.Button):
