@@ -9,6 +9,7 @@ from services.security import security_service
 from repositories.server_config import ServerConfigRepository
 from utils.embed_factory import EmbedFactory
 from utils.helpers import parse_due_date, format_task_status
+from utils.selection_views import WorkspaceSelectView, SpaceSelectView, ListSelectView, TaskSelectView, MemberSelectView
 from loguru import logger
 
 class TaskView(discord.ui.View):
@@ -169,8 +170,12 @@ class ClickUpTasks(commands.Cog):
                 
                 # Get default list if not provided
                 if not list_id:
-                    # This would come from user preferences or server config
-                    await interaction.response.send_message("❌ Please provide a list ID or set a default list.", ephemeral=True)
+                    # Offer to select a list using dropdowns
+                    await interaction.response.send_message(
+                        "❌ Please provide a list ID.\n\n"
+                        "💡 **Tip:** Use `/select-list` to browse and find list IDs using interactive dropdowns!",
+                        ephemeral=True
+                    )
                     return
                 
                 # Create task
@@ -392,6 +397,72 @@ class ClickUpTasks(commands.Cog):
         
         # Note: You would need to implement Discord -> ClickUp user mapping
         await interaction.response.send_message("⚠️ User mapping between Discord and ClickUp is not yet implemented.")
+    
+    @app_commands.command(name="select-list", description="Select a ClickUp list using dropdowns")
+    async def select_list(self, interaction: discord.Interaction):
+        """Select a ClickUp list using interactive dropdowns"""
+        api = await self._get_api(interaction.guild.id)
+        if not api:
+            await interaction.response.send_message("❌ ClickUp is not configured. Run `/clickup-setup` first.", ephemeral=True)
+            return
+        
+        async with api:
+            try:
+                # Get workspaces first
+                workspaces = await api.get_workspaces()
+                if not workspaces:
+                    await interaction.response.send_message("❌ No workspaces found.", ephemeral=True)
+                    return
+                
+                # Create workspace selection view
+                workspace_view = WorkspaceSelectView(api, workspaces)
+                
+                async def on_workspace_selected(workspace_interaction: discord.Interaction, workspace_id: str):
+                    # Create space selection view
+                    space_view = SpaceSelectView(api, workspace_id)
+                    
+                    async def on_space_selected(space_interaction: discord.Interaction, space_id: str):
+                        # Create list selection view
+                        list_view = ListSelectView(api, space_id)
+                        
+                        async def on_list_selected(list_interaction: discord.Interaction, list_id: str):
+                            # Get list details
+                            try:
+                                # We don't have a get_list method, so let's get it from the lists
+                                await list_interaction.response.send_message(
+                                    f"✅ Selected list ID: `{list_id}`\n"
+                                    f"You can now use this ID in other commands like `/task-create`!",
+                                    ephemeral=True
+                                )
+                            except Exception as e:
+                                await list_interaction.response.send_message(
+                                    f"❌ Error: {str(e)}", ephemeral=True
+                                )
+                        
+                        list_view.set_callback(on_list_selected)
+                        await space_interaction.response.send_message(
+                            "**Step 3:** Select a list:", 
+                            view=list_view, 
+                            ephemeral=True
+                        )
+                    
+                    space_view.set_callback(on_space_selected)
+                    await workspace_interaction.response.send_message(
+                        "**Step 2:** Select a space:", 
+                        view=space_view, 
+                        ephemeral=True
+                    )
+                
+                workspace_view.set_callback(on_workspace_selected)
+                await interaction.response.send_message(
+                    "**Step 1:** Select a workspace:", 
+                    view=workspace_view, 
+                    ephemeral=True
+                )
+                
+            except Exception as e:
+                logger.error(f"Failed to load workspaces: {e}")
+                await interaction.response.send_message(f"❌ Failed to load workspaces: {str(e)}", ephemeral=True)
 
 class ConfirmView(discord.ui.View):
     def __init__(self):

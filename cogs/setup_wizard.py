@@ -129,6 +129,7 @@ class FinalSetupView(discord.ui.View):
             "Setup Complete! 🎉",
             "Your ClickUp integration is now configured.\n\n"
             "**Available Slash Commands:**\n"
+            "• `/select-list` - Browse and select ClickUp lists with dropdowns\n"
             "• `/task-create` - Create a new ClickUp task\n"
             "• `/task-list` - List tasks from a ClickUp list\n"
             "• `/task-update` - Update an existing task\n"
@@ -136,9 +137,9 @@ class FinalSetupView(discord.ui.View):
             "• `/task-comment` - Add comments to tasks\n"
             "• `/task-assign` - Assign users to tasks\n\n"
             "**Getting Started:**\n"
-            "• Type `/task-create` to create your first task\n"
-            "• You'll need your ClickUp List ID for most commands\n"
-            "• All commands use modern Discord slash command interface"
+            "• Use `/select-list` to browse your ClickUp hierarchy and get list IDs\n"
+            "• Then use `/task-create` with the list ID to create your first task\n"
+            "• All commands use modern Discord slash command interface with interactive dropdowns"
         )
         
         await interaction.response.edit_message(embed=embed, view=None)
