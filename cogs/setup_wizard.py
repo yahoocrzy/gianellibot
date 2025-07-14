@@ -41,12 +41,15 @@ class APITokenModal(discord.ui.Modal, title="ClickUp API Token"):
         self.setup_view = setup_view
     
     async def on_submit(self, interaction: discord.Interaction):
+        # Defer response immediately for API calls
+        await interaction.response.defer(ephemeral=True)
+        
         # Validate token
         try:
             async with ClickUpAPI(self.token.value) as api:
                 workspaces = await api.get_workspaces()
                 if not workspaces:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         "Invalid token or no workspaces found.",
                         ephemeral=True
                     )
@@ -64,11 +67,11 @@ class APITokenModal(discord.ui.Modal, title="ClickUp API Token"):
                 )
                 
                 view = WorkspaceSelectView(self.setup_view, workspaces)
-                await interaction.response.edit_message(embed=embed, view=view)
+                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
                 
         except Exception as e:
             logger.error(f"Token validation error: {e}")
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Failed to validate token. Please check and try again.",
                 ephemeral=True
             )
