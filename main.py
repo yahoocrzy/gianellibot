@@ -67,6 +67,14 @@ class ClickUpBot(commands.Bot):
     async def on_ready(self):
         logger.info(f"Bot is ready! Logged in as {self.user}")
         self.start_time = datetime.utcnow()
+        
+        # Force sync commands again to ensure they're registered
+        try:
+            synced = await self.tree.sync()
+            logger.info(f"Synced {len(synced)} commands")
+        except Exception as e:
+            logger.error(f"Failed to sync commands: {e}")
+        
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
