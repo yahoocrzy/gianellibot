@@ -19,6 +19,8 @@ class ClickUpTasksEnhanced(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
+        self.list_cache = {}  # Cache lists by guild_id
+        self.cache_ttl = 300  # 5 minutes
     
     async def get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
         """Get ClickUp API instance for the guild"""
@@ -64,27 +66,33 @@ class ClickUpTasksEnhanced(commands.Cog):
         # Defer immediately
         await interaction.response.defer(ephemeral=True)
         
-        async with api:
-            # Get workspace and lists quickly
-            workspaces = await api.get_workspaces()
-            if not workspaces:
-                embed = EmbedFactory.create_error_embed(
-                    "No Workspaces",
-                    "No workspaces found."
-                )
-                await interaction.followup.send(embed=embed)
-                return
-            
-            # Quick list selection
-            workspace_id = workspaces[0]['id']
-            spaces = await api.get_spaces(workspace_id)
-            
-            all_lists = []
-            for space in spaces[:3]:
-                lists = await api.get_lists(space['id'])
-                for lst in lists:
-                    lst['space_name'] = space['name']
-                    all_lists.append(lst)
+        try:
+            async with api:
+                # Get workspace and lists quickly
+                workspaces = await api.get_workspaces()
+                if not workspaces:
+                    embed = EmbedFactory.create_error_embed(
+                        "No Workspaces",
+                        "No workspaces found."
+                    )
+                    await interaction.followup.send(embed=embed)
+                    return
+                
+                # Quick list selection
+                workspace_id = workspaces[0]['id']
+                spaces = await api.get_spaces(workspace_id)
+                
+                all_lists = []
+                # Limit spaces to prevent timeout
+                for space in spaces[:2]:  # Reduced from 3 to 2
+                    try:
+                        lists = await api.get_lists(space['id'])
+                        for lst in lists[:10]:  # Limit lists per space
+                            lst['space_name'] = space['name']
+                            all_lists.append(lst)
+                    except Exception as e:
+                        logger.warning(f"Failed to get lists for space {space['name']}: {e}")
+                        continue
             
             if not all_lists:
                 embed = EmbedFactory.create_error_embed(
@@ -125,14 +133,17 @@ class ClickUpTasksEnhanced(commands.Cog):
                 async def select_callback(self, select_interaction: discord.Interaction):
                     self.selected_list = next((l for l in all_lists if l['id'] == select_interaction.data['values'][0]), None)
                     self.stop()
-                    await select_interaction.response.defer()
+                    await select_interaction.response.defer_update()
             
             list_select = ListSelect()
             await interaction.followup.send(embed=embed, view=list_select)
             
-            await list_select.wait()
+            timed_out = await list_select.wait()
             
-            if not list_select.selected_list:
+            if timed_out or not list_select.selected_list:
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "Selection timed out. Please try again.")
+                    await interaction.edit_original_response(embed=embed, view=None)
                 return
             
             # Step 2: Select priority
@@ -144,9 +155,9 @@ class ClickUpTasksEnhanced(commands.Cog):
             priority_view = PrioritySelectView()
             await interaction.followup.send(embed=embed, view=priority_view, ephemeral=True)
             
-            await priority_view.wait()
+            timed_out = await priority_view.wait()
             
-            if not priority_view.selected_priority:
+            if timed_out or not priority_view.selected_priority:
                 embed = EmbedFactory.create_info_embed("Cancelled", "Task creation cancelled.")
                 await interaction.edit_original_response(embed=embed, view=None)
                 return
@@ -163,21 +174,26 @@ class ClickUpTasksEnhanced(commands.Cog):
                     self.assign = None
                 
                 @discord.ui.button(label="Yes, assign someone", style=discord.ButtonStyle.primary)
-                async def yes_assign(self, interaction: discord.Interaction, button: discord.ui.Button):
+                async def yes_assign(self, button_interaction: discord.Interaction, button: discord.ui.Button):
                     self.assign = True
                     self.stop()
-                    await interaction.response.defer()
+                    await button_interaction.response.defer_update()
                 
                 @discord.ui.button(label="No, skip assignment", style=discord.ButtonStyle.secondary)
-                async def no_assign(self, interaction: discord.Interaction, button: discord.ui.Button):
+                async def no_assign(self, button_interaction: discord.Interaction, button: discord.ui.Button):
                     self.assign = False
                     self.stop()
-                    await interaction.response.defer()
+                    await button_interaction.response.defer_update()
             
             assign_choice = AssignChoice()
             await interaction.edit_original_response(embed=embed, view=assign_choice)
             
-            await assign_choice.wait()
+            timed_out = await assign_choice.wait()
+            
+            if timed_out:
+                embed = EmbedFactory.create_error_embed("Timeout", "Selection timed out. Task will be created without assignee.")
+                await interaction.edit_original_response(embed=embed, view=None)
+                assign_choice.assign = False
             
             assignee_ids = []
             if assign_choice.assign:
@@ -187,9 +203,9 @@ class ClickUpTasksEnhanced(commands.Cog):
                     user_view = UserSelectView(api, workspace.workspace_id)
                     await user_view.start(interaction)
                     
-                    await user_view.wait()
+                    timed_out = await user_view.wait()
                     
-                    if user_view.selected_user_id:
+                    if not timed_out and user_view.selected_user_id:
                         assignee_ids = [int(user_view.selected_user_id)]
             
             # Create the task
@@ -245,6 +261,13 @@ class ClickUpTasksEnhanced(commands.Cog):
                     f"❌ Failed to create task: {str(e)}"
                 )
                 await interaction.edit_original_response(embed=embed)
+        except Exception as e:
+            logger.error(f"Error in task creation flow: {e}")
+            embed = EmbedFactory.create_error_embed(
+                "Error",
+                f"An error occurred: {str(e)}"
+            )
+            await interaction.followup.send(embed=embed)
     
     @app_commands.command(name="task-update", description="Update an existing task with dropdowns")
     @app_commands.describe(
@@ -272,18 +295,24 @@ class ClickUpTasksEnhanced(commands.Cog):
             list_view = ListSelectView(api)
             await list_view.start(interaction)
             
-            await list_view.wait()
+            timed_out = await list_view.wait()
             
-            if not list_view.selected_list_id:
+            if timed_out or not list_view.selected_list_id:
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "List selection timed out. Please try again.")
+                    await interaction.edit_original_response(embed=embed, view=None)
                 return
             
             # Step 2: Select task
             task_view = TaskSelectView(api, list_view.selected_list_id)
             await task_view.start(interaction)
             
-            await task_view.wait()
+            timed_out = await task_view.wait()
             
-            if not task_view.selected_task_id:
+            if timed_out or not task_view.selected_task_id:
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "Task selection timed out. Please try again.")
+                    await interaction.edit_original_response(embed=embed, view=None)
                 return
             
             # Step 3: What to update?
@@ -325,14 +354,14 @@ class ClickUpTasksEnhanced(commands.Cog):
                         return
                     self.confirmed = True
                     self.stop()
-                    await interaction.response.defer()
+                    await interaction.response.defer_update()
             
             update_choice = UpdateChoice()
             await interaction.edit_original_response(embed=embed, view=update_choice)
             
-            await update_choice.wait()
+            timed_out = await update_choice.wait()
             
-            if not update_choice.confirmed:
+            if timed_out or not update_choice.confirmed:
                 embed = EmbedFactory.create_info_embed("Cancelled", "Update cancelled.")
                 await interaction.edit_original_response(embed=embed, view=None)
                 return
@@ -349,7 +378,11 @@ class ClickUpTasksEnhanced(commands.Cog):
             if update_choice.update_status:
                 status_view = StatusSelectView(api, list_view.selected_list_id)
                 await status_view.start(interaction)
-                await status_view.wait()
+                timed_out = await status_view.wait()
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "Status selection timed out.")
+                    await interaction.edit_original_response(embed=embed, view=None)
+                    return
                 
                 if status_view.selected_status:
                     updates['status'] = status_view.selected_status
@@ -359,9 +392,9 @@ class ClickUpTasksEnhanced(commands.Cog):
                 priority_view = PrioritySelectView()
                 embed = EmbedFactory.create_info_embed("Select Priority", "Choose new priority level:")
                 await interaction.edit_original_response(embed=embed, view=priority_view)
-                await priority_view.wait()
+                timed_out = await priority_view.wait()
                 
-                if priority_view.selected_priority:
+                if not timed_out and priority_view.selected_priority:
                     updates['priority'] = {"priority": priority_view.selected_priority}
             
             # Assignee update
@@ -370,9 +403,9 @@ class ClickUpTasksEnhanced(commands.Cog):
                 if workspace:
                     user_view = UserSelectView(api, workspace.workspace_id)
                     await user_view.start(interaction)
-                    await user_view.wait()
+                    timed_out = await user_view.wait()
                     
-                    if user_view.selected_user_id:
+                    if not timed_out and user_view.selected_user_id:
                         updates['assignees'] = [int(user_view.selected_user_id)]
             
             # Apply updates
@@ -443,13 +476,32 @@ class ClickUpTasksEnhanced(commands.Cog):
                     await interaction.followup.send(embed=embed)
                     return
                 
-                # Get all lists from all spaces for quick selection
-                all_lists = []
-                for space in spaces[:3]:  # Limit to avoid timeout
-                    lists = await api.get_lists(space['id'])
-                    for lst in lists:
-                        lst['space_name'] = space['name']
-                        all_lists.append(lst)
+                # Check cache first
+                import time
+                cache_key = f"{interaction.guild_id}_{workspace_id}"
+                cached_data = self.list_cache.get(cache_key)
+                
+                if cached_data and (time.time() - cached_data['timestamp']) < self.cache_ttl:
+                    all_lists = cached_data['lists']
+                else:
+                    # Get all lists from all spaces for quick selection
+                    all_lists = []
+                    # Limit to avoid timeout
+                    for space in spaces[:2]:  # Reduced to 2 spaces
+                        try:
+                            lists = await api.get_lists(space['id'])
+                            for lst in lists[:10]:  # Limit lists per space
+                                lst['space_name'] = space['name']
+                                all_lists.append(lst)
+                        except Exception as e:
+                            logger.warning(f"Failed to get lists for space {space['name']}: {e}")
+                            continue
+                    
+                    # Cache the results
+                    self.list_cache[cache_key] = {
+                        'lists': all_lists,
+                        'timestamp': time.time()
+                    }
                 
                 if not all_lists:
                     embed = EmbedFactory.create_error_embed(
@@ -490,14 +542,17 @@ class ClickUpTasksEnhanced(commands.Cog):
                     async def select_callback(self, select_interaction: discord.Interaction):
                         self.selected_list = next((l for l in all_lists if l['id'] == select_interaction.data['values'][0]), None)
                         self.stop()
-                        await select_interaction.response.defer()
+                        await select_interaction.response.defer_update()
                 
                 list_select = QuickListSelect()
                 await interaction.followup.send(embed=embed, view=list_select)
                 
-                await list_select.wait()
+                timed_out = await list_select.wait()
                 
-                if not list_select.selected_list:
+                if timed_out or not list_select.selected_list:
+                    if timed_out:
+                        embed = EmbedFactory.create_error_embed("Timeout", "Selection timed out. Please try again.")
+                        await interaction.edit_original_response(embed=embed, view=None)
                     return
                 
                 selected_list = list_select.selected_list
@@ -592,18 +647,24 @@ class ClickUpTasksEnhanced(commands.Cog):
             list_view = ListSelectView(api)
             await list_view.start(interaction)
             
-            await list_view.wait()
+            timed_out = await list_view.wait()
             
-            if not list_view.selected_list_id:
+            if timed_out or not list_view.selected_list_id:
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "List selection timed out. Please try again.")
+                    await interaction.edit_original_response(embed=embed, view=None)
                 return
             
             # Select task
             task_view = TaskSelectView(api, list_view.selected_list_id)
             await task_view.start(interaction)
             
-            await task_view.wait()
+            timed_out = await task_view.wait()
             
-            if not task_view.selected_task_id:
+            if timed_out or not task_view.selected_task_id:
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "Task selection timed out. Please try again.")
+                    await interaction.edit_original_response(embed=embed, view=None)
                 return
             
             # Confirm deletion
@@ -619,22 +680,22 @@ class ClickUpTasksEnhanced(commands.Cog):
                     self.confirmed = False
                 
                 @discord.ui.button(label="Delete Task", style=discord.ButtonStyle.danger)
-                async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+                async def confirm(self, button_interaction: discord.Interaction, button: discord.ui.Button):
                     self.confirmed = True
                     self.stop()
-                    await interaction.response.defer()
+                    await button_interaction.response.defer_update()
                 
                 @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-                async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+                async def cancel(self, button_interaction: discord.Interaction, button: discord.ui.Button):
                     self.stop()
-                    await interaction.response.defer()
+                    await button_interaction.response.defer_update()
             
             confirm_view = DeleteConfirm()
             await interaction.edit_original_response(embed=embed, view=confirm_view)
             
-            await confirm_view.wait()
+            timed_out = await confirm_view.wait()
             
-            if not confirm_view.confirmed:
+            if timed_out or not confirm_view.confirmed:
                 embed = EmbedFactory.create_info_embed("Cancelled", "Task deletion cancelled.")
                 await interaction.edit_original_response(embed=embed, view=None)
                 return
