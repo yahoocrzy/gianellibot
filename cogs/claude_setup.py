@@ -191,7 +191,7 @@ class ClaudeSetup(commands.Cog):
     async def claude_settings(
         self,
         interaction: discord.Interaction,
-        model: Optional[app_commands.Choice[str]] = None,
+        model: Optional[str] = None,
         max_tokens: Optional[app_commands.Range[int, 100, 8192]] = None,
         temperature: Optional[app_commands.Range[float, 0.0, 1.0]] = None
     ):
@@ -231,7 +231,7 @@ class ClaudeSetup(commands.Cog):
         # Update settings
         success = await ClaudeConfigRepository.update_model_settings(
             interaction.guild_id,
-            model=model.value if model else None,
+            model=model if model else None,
             max_tokens=max_tokens,
             temperature=temperature
         )
@@ -244,7 +244,7 @@ class ClaudeSetup(commands.Cog):
             
             updates = []
             if model:
-                updates.append(f"• Model: `{model.value}`")
+                updates.append(f"• Model: `{model}`")
             if max_tokens is not None:
                 updates.append(f"• Max Tokens: `{max_tokens}`")
             if temperature is not None:

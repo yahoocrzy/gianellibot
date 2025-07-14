@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from typing import Optional
+import json
 from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
 from repositories.clickup_workspaces import ClickUpWorkspaceRepository
@@ -182,7 +183,7 @@ class AICommandsEnhanced(commands.Cog):
     async def ai_analyze_tasks(
         self,
         interaction: discord.Interaction,
-        analysis_type: app_commands.Choice[str]
+        analysis_type: str
     ):
         """Analyze tasks using AI"""
         # Check configuration
@@ -255,14 +256,23 @@ class AICommandsEnhanced(commands.Cog):
                     "optimization": "Provide general optimization suggestions for this task list."
                 }
                 
-                prompt = f"{prompts.get(analysis_type.value, prompts['optimization'])}\n\nTasks:\n{json.dumps(task_summary, indent=2)}"
+                prompt = f"{prompts.get(analysis_type, prompts['optimization'])}\n\nTasks:\n{json.dumps(task_summary, indent=2)}"
                 
                 # Get AI analysis
                 analysis = await claude_api.create_message(prompt, max_tokens=1500)
                 
                 # Create result embed
+                # Get display name for analysis type
+                analysis_names = {
+                    "priorities": "Priority Suggestions",
+                    "dependencies": "Task Dependencies",
+                    "workload": "Workload Distribution",
+                    "overdue": "Overdue & At Risk",
+                    "optimization": "General Optimization"
+                }
+                
                 embed = EmbedFactory.create_info_embed(
-                    f"🤖 AI Analysis: {analysis_type.name}",
+                    f"🤖 AI Analysis: {analysis_names.get(analysis_type, 'Analysis')}",
                     f"Analysis of {len(tasks)} tasks from **{list_view.selected_list_name}**"
                 )
                 
