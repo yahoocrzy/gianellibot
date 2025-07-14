@@ -71,6 +71,33 @@ class UserPreference(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class ClickUpWorkspace(Base):
+    __tablename__ = "clickup_workspaces"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    workspace_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    added_by_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ClaudeConfig(Base):
+    __tablename__ = "claude_configs"
+    
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(String(100), default="claude-3-opus-20240229")
+    max_tokens: Mapped[int] = mapped_column(Integer, default=4096)
+    temperature: Mapped[float] = mapped_column(Integer, default=0.7)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    added_by_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Cache(Base):
     __tablename__ = "cache"
     

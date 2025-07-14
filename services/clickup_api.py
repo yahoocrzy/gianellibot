@@ -146,6 +146,20 @@ class ClickUpAPI:
         return await self._request("POST", f"task/{task_id}/field/{field_id}", json={"value": value})
     
     # Members
+    async def get_folder_lists(self, folder_id: str) -> List[Dict[str, Any]]:
+        """Get all lists in a folder"""
+        data = await self._request("GET", f"folder/{folder_id}/list")
+        return data.get("lists", [])
+    
+    async def get_list(self, list_id: str) -> Dict[str, Any]:
+        """Get a single list details"""
+        return await self._request("GET", f"list/{list_id}")
+    
+    async def get_workspace_members(self, workspace_id: str) -> List[Dict[str, Any]]:
+        """Get all members in a workspace"""
+        data = await self._request("GET", f"team/{workspace_id}/member")
+        return data.get("members", [])
+    
     async def get_members(self, workspace_id: str) -> List[Dict[str, Any]]:
         """Get all members in a workspace"""
         data = await self._request("GET", f"team/{workspace_id}/member")
