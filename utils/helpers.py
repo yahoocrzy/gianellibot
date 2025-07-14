@@ -10,11 +10,15 @@ async def get_prefix(bot: commands.Bot, message: discord.Message) -> str:
     if not message.guild:
         return "!"
     
-    repo = ServerConfigRepository()
-    config = await repo.get_config(message.guild.id)
-    
-    if config and config.get('prefix'):
-        return config['prefix']
+    try:
+        repo = ServerConfigRepository()
+        config = await repo.get_config(message.guild.id)
+        
+        if config and config.get('prefix'):
+            return config['prefix']
+    except Exception:
+        # Fall back to default prefix if database isn't ready
+        pass
     
     return "!"
 

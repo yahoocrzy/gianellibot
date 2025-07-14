@@ -11,14 +11,24 @@ if DATABASE_URL.startswith("postgres://"):
     # Render uses postgres:// but SQLAlchemy needs postgresql://
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
-# Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10
-)
+# Create async engine with improved configuration
+if DATABASE_URL.startswith("sqlite"):
+    # SQLite configuration
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True
+    )
+else:
+    # PostgreSQL configuration for Render
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=300
+    )
 
 # Session factory
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

@@ -14,6 +14,9 @@ import sys
 # Load environment variables
 load_dotenv()
 
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+
 # Configure logging
 logger.add("logs/bot.log", rotation="1 day", retention="7 days", level=os.getenv("LOG_LEVEL", "INFO"))
 
