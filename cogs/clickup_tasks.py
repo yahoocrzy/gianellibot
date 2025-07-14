@@ -135,10 +135,7 @@ class ClickUpTasks(commands.Cog):
         token = security_service.decrypt(config['clickup_token_encrypted'])
         return ClickUpAPI(token)
     
-    # Create an app_commands group for slash commands
-    task_group = app_commands.Group(name="task", description="ClickUp task management commands")
-    
-    @task_group.command(name="create", description="Create a new task")
+    @app_commands.command(name="task-create", description="Create a new task")
     @app_commands.describe(
         name="Task name",
         description="Task description",
@@ -209,7 +206,7 @@ class ClickUpTasks(commands.Cog):
                 logger.error(f"Failed to create task: {e}")
                 await interaction.response.send_message(f"❌ Failed to create task: {str(e)}", ephemeral=True)
     
-    @task_group.command(name="list", description="List tasks")
+    @app_commands.command(name="task-list", description="List tasks")
     @app_commands.describe(
         list_id="List ID to fetch tasks from",
         status="Filter by status",
@@ -275,7 +272,7 @@ class ClickUpTasks(commands.Cog):
                 logger.error(f"Failed to list tasks: {e}")
                 await interaction.response.send_message(f"❌ Failed to list tasks: {str(e)}", ephemeral=True)
     
-    @task_group.command(name="update", description="Update a task")
+    @app_commands.command(name="task-update", description="Update a task")
     @app_commands.describe(
         task_id="Task ID to update",
         name="New task name",
@@ -325,7 +322,7 @@ class ClickUpTasks(commands.Cog):
                 logger.error(f"Failed to update task: {e}")
                 await interaction.response.send_message(f"❌ Failed to update task: {str(e)}")
     
-    @task_group.command(name="delete", description="Delete a task")
+    @app_commands.command(name="task-delete", description="Delete a task")
     @app_commands.describe(task_id="Task ID to delete")
     async def delete_task(self, interaction: discord.Interaction, task_id: str):
         """Delete a task"""
@@ -354,7 +351,7 @@ class ClickUpTasks(commands.Cog):
         else:
             await interaction.followup.send("Task deletion cancelled.")
     
-    @task_group.command(name="comment", description="Add a comment to a task")
+    @app_commands.command(name="task-comment", description="Add a comment to a task")
     @app_commands.describe(
         task_id="Task ID to comment on",
         comment="Comment text"
@@ -380,7 +377,7 @@ class ClickUpTasks(commands.Cog):
                 logger.error(f"Failed to add comment: {e}")
                 await interaction.response.send_message(f"❌ Failed to add comment: {str(e)}")
     
-    @task_group.command(name="assign", description="Assign users to a task")
+    @app_commands.command(name="task-assign", description="Assign a user to a task")
     @app_commands.describe(
         task_id="Task ID to assign user to",
         user="Discord user to assign"

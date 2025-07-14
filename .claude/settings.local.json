@@ -10,7 +10,8 @@
       "Bash(cat:*)",
       "WebFetch(domain:pypi.org)",
       "Bash(rm:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(git push:*)"
     ],
     "deny": []
   }
