@@ -286,8 +286,8 @@ class CalendarCommands(commands.Cog):
             embed.add_field(
                 name="Quick Setup",
                 value="1. Get your ClickUp API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
-                      "2. Run `/workspace-add` and paste your token\n"
-                      "3. Try `/calendar` again!",
+                      "2. Run `/clickup-setup` OR `/workspace-add` and paste your token\n"
+                      "3. Calendar will work immediately after setup!",
                 inline=False
             )
             embed.add_field(
@@ -398,29 +398,41 @@ class CalendarCommands(commands.Cog):
             target_month = date_view.month
             target_year = date_view.year
             
-            # Now select list
-            list_view = ListSelectView(api)
-            await list_view.start(interaction)
-            
-            await list_view.wait()
-            
-            if not list_view.selected_list_id:
-                return
-            
-            # Fetch tasks
+            # Fetch ALL tasks from ALL lists automatically
             embed = EmbedFactory.create_info_embed(
                 "Loading Calendar",
-                f"⏳ Loading tasks from **{list_view.selected_list_name}**..."
+                "⏳ Loading all tasks for calendar view..."
             )
             await interaction.edit_original_response(embed=embed, view=None)
             
             try:
-                # Get tasks with due dates
-                tasks = await api.get_tasks(list_view.selected_list_id)
+                # Get all tasks from all workspaces and lists
+                all_tasks = []
                 
-                # Organize tasks by date
+                workspaces = await api.get_workspaces()
+                for workspace in workspaces:
+                    try:
+                        spaces = await api.get_spaces(workspace['id'])
+                        for space in spaces[:3]:  # Limit spaces to prevent timeout
+                            try:
+                                lists = await api.get_lists(space['id'])
+                                for lst in lists[:5]:  # Limit lists per space
+                                    try:
+                                        tasks = await api.get_tasks(lst['id'])
+                                        all_tasks.extend(tasks)
+                                    except Exception as e:
+                                        logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
+                                        continue
+                            except Exception as e:
+                                logger.warning(f"Failed to get lists from space {space['name']}: {e}")
+                                continue
+                    except Exception as e:
+                        logger.warning(f"Failed to get spaces from workspace {workspace['name']}: {e}")
+                        continue
+                
+                # Organize all tasks by date
                 tasks_by_date = {}
-                for task in tasks:
+                for task in all_tasks:
                     if task.get('due_date'):
                         # Convert timestamp to date
                         due_timestamp = int(task['due_date']) / 1000
@@ -457,8 +469,8 @@ class CalendarCommands(commands.Cog):
             embed.add_field(
                 name="Quick Setup",
                 value="1. Get your ClickUp API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
-                      "2. Run `/workspace-add` and paste your token\n"
-                      "3. Try `/calendar` again!",
+                      "2. Run `/clickup-setup` OR `/workspace-add` and paste your token\n"
+                      "3. Calendar will work immediately after setup!",
                 inline=False
             )
             embed.add_field(
@@ -511,24 +523,37 @@ class CalendarCommands(commands.Cog):
                 
             days = days_view.days
             
-            # Select list
-            list_view = ListSelectView(api)
-            await list_view.start(interaction)
-            
-            await list_view.wait()
-            
-            if not list_view.selected_list_id:
-                return
-            
-            # Fetch tasks
+            # Fetch ALL tasks automatically
             embed = EmbedFactory.create_info_embed(
                 "Loading Upcoming Tasks",
-                f"⏳ Loading tasks from **{list_view.selected_list_name}**..."
+                f"⏳ Loading all tasks for the next {days} days..."
             )
             await interaction.edit_original_response(embed=embed, view=None)
             
             try:
-                tasks = await api.get_tasks(list_view.selected_list_id)
+                # Get all tasks from all workspaces and lists
+                all_tasks = []
+                
+                workspaces = await api.get_workspaces()
+                for workspace in workspaces:
+                    try:
+                        spaces = await api.get_spaces(workspace['id'])
+                        for space in spaces[:3]:  # Limit spaces to prevent timeout
+                            try:
+                                lists = await api.get_lists(space['id'])
+                                for lst in lists[:5]:  # Limit lists per space
+                                    try:
+                                        tasks = await api.get_tasks(lst['id'])
+                                        all_tasks.extend(tasks)
+                                    except Exception as e:
+                                        logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
+                                        continue
+                            except Exception as e:
+                                logger.warning(f"Failed to get lists from space {space['name']}: {e}")
+                                continue
+                    except Exception as e:
+                        logger.warning(f"Failed to get spaces from workspace {workspace['name']}: {e}")
+                        continue
                 
                 # Filter for upcoming tasks
                 now = datetime.now()
@@ -537,7 +562,7 @@ class CalendarCommands(commands.Cog):
                 upcoming = []
                 overdue = []
                 
-                for task in tasks:
+                for task in all_tasks:
                     if task.get('due_date'):
                         due_timestamp = int(task['due_date']) / 1000
                         due_date = datetime.fromtimestamp(due_timestamp)
@@ -554,7 +579,7 @@ class CalendarCommands(commands.Cog):
                 # Create embed
                 embed = EmbedFactory.create_info_embed(
                     f"📅 Upcoming Tasks - Next {days} Days",
-                    f"From list: **{list_view.selected_list_name}**"
+                    f"From all workspaces and lists"
                 )
                 
                 # Overdue tasks
@@ -653,7 +678,7 @@ class CalendarCommands(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured", 
-                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -665,7 +690,7 @@ class CalendarCommands(commands.Cog):
             if not workspaces:
                 embed = EmbedFactory.create_error_embed(
                     "No Workspaces",
-                    "No workspaces configured. Use `/workspace-add` first."
+                    "No workspaces configured. Use `/clickup-setup` OR `/workspace-add` first."
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return

@@ -107,7 +107,7 @@ class WorkspaceManagement(commands.Cog):
                         guild_id=modal_interaction.guild_id,
                         workspace_id=selected_workspace['id'],
                         workspace_name=selected_workspace['name'],
-                        api_token=token,
+                        token=token,
                         added_by_user_id=modal_interaction.user.id
                     )
                     
@@ -228,7 +228,7 @@ class WorkspaceManagement(commands.Cog):
         if not workspaces:
             embed = EmbedFactory.create_error_embed(
                 "No Workspaces",
-                "No workspaces configured. Use `/workspace-add` first."
+                "No workspaces configured. Use `/clickup-setup` OR `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -300,9 +300,10 @@ class WorkspaceManagement(commands.Cog):
             
             embed.add_field(
                 name="What This Means",
-                value="• Calendar commands will use this workspace\n"
-                      "• Task commands will default to this workspace\n"
-                      "• AI commands will operate in this workspace",
+                value="• `/calendar`, `/upcoming`, `/today` will show tasks from this workspace\n"
+                      "• `/task-create` will default to lists in this workspace\n"
+                      "• AI commands will operate in this workspace\n"
+                      "• You can switch workspaces anytime with `/workspace-switch`",
                 inline=False
             )
         else:
@@ -429,6 +430,73 @@ class WorkspaceManagement(commands.Cog):
             )
         
         await interaction.edit_original_response(embed=embed, view=None)
+    
+    @app_commands.command(name="workspace-status", description="Show current workspace status")
+    async def workspace_status(self, interaction: discord.Interaction):
+        """Show which workspace is currently active"""
+        workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+        
+        if not workspaces:
+            embed = EmbedFactory.create_error_embed(
+                "No Workspaces",
+                "No workspaces configured. Use `/clickup-setup` OR `/workspace-add` first."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Get current default
+        current_default = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+        
+        if current_default:
+            embed = EmbedFactory.create_success_embed(
+                "✅ Current Active Workspace",
+                f"**{current_default.workspace_name}**"
+            )
+            
+            embed.add_field(
+                name="Workspace Details",
+                value=f"• **Name:** {current_default.workspace_name}\n"
+                      f"• **ID:** `{current_default.workspace_id}`\n"
+                      f"• **Added:** <t:{int(current_default.created_at.timestamp())}:R>\n"
+                      f"• **Status:** {'✅ Active' if current_default.is_active else '❌ Inactive'}",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Commands Using This Workspace",
+                value="• `/calendar` - View all tasks in calendar\n"
+                      "• `/upcoming` - See upcoming tasks\n"
+                      "• `/today` - View today's tasks\n"
+                      "• `/task-create` - Create new tasks\n"
+                      "• `/ai-assistant` - AI-powered features",
+                inline=False
+            )
+            
+            if len(workspaces) > 1:
+                embed.add_field(
+                    name="Switch Workspace",
+                    value="Use `/workspace-switch` to change active workspace",
+                    inline=False
+                )
+        else:
+            embed = EmbedFactory.create_warning_embed(
+                "No Default Workspace",
+                "No default workspace is set."
+            )
+            
+            embed.add_field(
+                name="Available Workspaces",
+                value="\n".join([f"• {ws.workspace_name}" for ws in workspaces]),
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Set Default",
+                value="Use `/workspace-switch` to set a default workspace",
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(WorkspaceManagement(bot))

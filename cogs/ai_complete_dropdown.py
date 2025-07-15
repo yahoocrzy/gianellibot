@@ -209,12 +209,13 @@ class AICompleteDropdown(commands.Cog):
     async def ai_dropdown(self, interaction: discord.Interaction):
         """AI command with dropdown interface"""
         
-        # Check configuration
-        workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
-        if not workspace:
+        # Check configuration using unified config
+        from utils.unified_config import UnifiedConfigManager
+        clickup_api = await UnifiedConfigManager.get_clickup_api(interaction.guild_id)
+        if not clickup_api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return

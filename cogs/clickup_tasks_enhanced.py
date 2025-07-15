@@ -35,7 +35,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` or `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -79,10 +79,72 @@ class ClickUpTasksEnhanced(commands.Cog):
                 await interaction.followup.send(embed=embed)
                 return
             
-            # Show list selection
+            # Step 1: Select task template
+            embed = EmbedFactory.create_info_embed(
+                "Select Task Type",
+                "Choose what type of task you want to create:"
+            )
+            
+            class TaskTypeSelect(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=180)
+                    self.selected_name = None
+                    self.selected_description = None
+                    
+                    task_types = [
+                        {"name": "Bug Fix - Critical", "desc": "High priority bug requiring immediate attention"},
+                        {"name": "Feature Implementation", "desc": "New feature development work"},
+                        {"name": "Code Review", "desc": "Review and approve code changes"},
+                        {"name": "Documentation Update", "desc": "Update or create documentation"},
+                        {"name": "Testing & QA", "desc": "Testing and quality assurance work"},
+                        {"name": "Performance Optimization", "desc": "Improve system performance and efficiency"},
+                        {"name": "Security Enhancement", "desc": "Security improvements and hardening"},
+                        {"name": "UI/UX Improvement", "desc": "User interface and experience enhancements"},
+                        {"name": "Database Migration", "desc": "Database schema or data migration work"},
+                        {"name": "Deployment Task", "desc": "Infrastructure and deployment related work"},
+                        {"name": "Research & Investigation", "desc": "Research new technologies or investigate issues"},
+                        {"name": "Meeting & Planning", "desc": "Team meetings and project planning sessions"}
+                    ]
+                    
+                    options = []
+                    for task_type in task_types:
+                        options.append(
+                            discord.SelectOption(
+                                label=task_type["name"],
+                                value=f"{task_type['name']}||{task_type['desc']}",
+                                description=task_type["desc"][:100]
+                            )
+                        )
+                    
+                    select = discord.ui.Select(
+                        placeholder="Choose a task type...",
+                        options=options
+                    )
+                    select.callback = self.select_callback
+                    self.add_item(select)
+                
+                async def select_callback(self, select_interaction: discord.Interaction):
+                    parts = select_interaction.data['values'][0].split('||')
+                    self.selected_name = parts[0]
+                    self.selected_description = parts[1]
+                    self.stop()
+                    await select_interaction.response.defer_update()
+            
+            task_type_select = TaskTypeSelect()
+            await interaction.followup.send(embed=embed, view=task_type_select)
+            
+            timed_out = await task_type_select.wait()
+            
+            if timed_out or not task_type_select.selected_name:
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "Selection timed out. Please try again.")
+                    await interaction.edit_original_response(embed=embed, view=None)
+                return
+            
+            # Step 2: Show list selection
             embed = EmbedFactory.create_info_embed(
                 "Select List",
-                f"Where should I create the task: **{selected_name}**?"
+                f"Creating task: **{task_type_select.selected_name}**\n\nWhere should I create this task?"
             )
             
             class ListSelect(discord.ui.View):
@@ -123,10 +185,10 @@ class ClickUpTasksEnhanced(commands.Cog):
                     await interaction.edit_original_response(embed=embed, view=None)
                 return
             
-            # Step 2: Select priority
+            # Step 3: Select priority
             embed = EmbedFactory.create_info_embed(
                 "Select Priority",
-                f"Creating task: **{name}**\n\nChoose priority level:"
+                f"Creating task: **{task_type_select.selected_name}**\n\nChoose priority level:"
             )
             
             priority_view = PrioritySelectView()
@@ -139,7 +201,7 @@ class ClickUpTasksEnhanced(commands.Cog):
                 await interaction.edit_original_response(embed=embed, view=None)
                 return
             
-            # Step 3: Select assignee (optional)
+            # Step 4: Select assignee (optional)
             embed = EmbedFactory.create_info_embed(
                 "Assign User (Optional)",
                 "Would you like to assign this task to someone?"
@@ -193,19 +255,11 @@ class ClickUpTasksEnhanced(commands.Cog):
             await interaction.edit_original_response(embed=embed, view=None)
             
             try:
-                # Parse due date
-                due_date_unix = None
-                if due_date:
-                    parsed_date = parse_due_date(due_date)
-                    if parsed_date:
-                        due_date_unix = int(parsed_date.timestamp() * 1000)
-                
-                # Create task
+                # Create task data
                 task_data = {
-                    "name": selected_name,
-                    "description": selected_description,
+                    "name": task_type_select.selected_name,
+                    "description": task_type_select.selected_description,
                     "priority": {"priority": priority_view.selected_priority} if priority_view.selected_priority else None,
-                    "due_date": due_date_unix,
                     "assignees": assignee_ids
                 }
                 
@@ -214,7 +268,7 @@ class ClickUpTasksEnhanced(commands.Cog):
                 # Success embed
                 embed = EmbedFactory.create_success_embed(
                     "Task Created Successfully",
-                    f"✅ Created task: **{selected_name}**"
+                    f"✅ Created task: **{task_type_select.selected_name}**"
                 )
                 
                 embed.add_field(name="List", value=list_select.selected_list['name'], inline=True)
@@ -223,8 +277,7 @@ class ClickUpTasksEnhanced(commands.Cog):
                 if assignee_ids:
                     embed.add_field(name="Assigned to", value=user_view.selected_user_name, inline=True)
                 
-                if due_date_unix:
-                    embed.add_field(name="Due Date", value=f"<t:{int(due_date_unix/1000)}:F>", inline=True)
+                # Note: No due date in this simplified version
                 
                 if result.get('url'):
                     embed.add_field(name="View Task", value=f"[Click here]({result['url']})", inline=False)
@@ -253,7 +306,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` or `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -530,8 +583,8 @@ class ClickUpTasksEnhanced(commands.Cog):
                     f"✅ Successfully updated: **{task_view.selected_task_name}**"
                 )
                 
-                if new_name:
-                    embed.add_field(name="New Name", value=new_name, inline=True)
+                if 'name' in updates:
+                    embed.add_field(name="New Name", value=updates['name'], inline=True)
                 if 'status' in updates:
                     embed.add_field(name="Status", value=updates['status'].title(), inline=True)
                 if 'priority' in updates:
@@ -556,7 +609,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` or `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -750,7 +803,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` or `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return

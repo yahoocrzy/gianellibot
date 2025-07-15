@@ -123,7 +123,7 @@ class UnifiedConfigManager:
                 guild_id=guild_id,
                 workspace_id=target_workspace['id'],
                 workspace_name=target_workspace['name'],
-                api_token=token,
+                token=token,
                 added_by_user_id=user_id
             )
             

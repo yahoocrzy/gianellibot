@@ -1,0 +1,610 @@
+import discord
+from discord.ext import commands
+from discord import app_commands
+from typing import Optional, Dict, List
+import asyncio
+import io
+import json
+from datetime import datetime, timedelta
+import speech_recognition as sr
+import tempfile
+import os
+
+from services.clickup_api import ClickUpAPI
+from services.claude_api import ClaudeAPI
+from repositories.claude_config import ClaudeConfigRepository
+from utils.embed_factory import EmbedFactory
+from utils.unified_config import UnifiedConfigManager
+from loguru import logger
+
+class VoiceCommandProcessor:
+    """Processes voice commands and converts them to structured actions"""
+    
+    def __init__(self, claude_api: ClaudeAPI):
+        self.claude_api = claude_api
+        
+        # Voice command templates
+        self.command_patterns = {
+            "task_create": [
+                "create task", "new task", "add task", "make task",
+                "create a task", "add a new task"
+            ],
+            "task_list": [
+                "list tasks", "show tasks", "what tasks", "my tasks",
+                "show me tasks", "what are my tasks"
+            ],
+            "task_update": [
+                "update task", "change task", "modify task", "edit task",
+                "update the task", "change the task"
+            ],
+            "task_complete": [
+                "complete task", "finish task", "done with task", "mark complete",
+                "task complete", "task done"
+            ],
+            "calendar_view": [
+                "show calendar", "calendar view", "view calendar", "open calendar",
+                "show me calendar", "what's on calendar"
+            ],
+            "status_report": [
+                "status report", "project status", "how are things", "progress report",
+                "what's the status", "give me status"
+            ]
+        }
+    
+    async def process_voice_command(self, transcribed_text: str) -> Dict:
+        """Process voice command and return structured action"""
+        text_lower = transcribed_text.lower().strip()
+        
+        # First, try to match known patterns
+        detected_command = None
+        for command_type, patterns in self.command_patterns.items():
+            for pattern in patterns:
+                if pattern in text_lower:
+                    detected_command = command_type
+                    break
+            if detected_command:
+                break
+        
+        if not detected_command:
+            # Use AI to interpret the command
+            detected_command = await self._ai_interpret_command(transcribed_text)
+        
+        # Extract parameters using AI
+        parameters = await self._extract_parameters(transcribed_text, detected_command)
+        
+        return {
+            "command": detected_command,
+            "original_text": transcribed_text,
+            "parameters": parameters,
+            "confidence": self._calculate_confidence(transcribed_text, detected_command)
+        }
+    
+    async def _ai_interpret_command(self, text: str) -> str:
+        """Use AI to interpret unclear voice commands"""
+        prompt = f"""Analyze this voice command and determine the intent:
+
+Text: "{text}"
+
+Available commands:
+- task_create: Creating new tasks
+- task_list: Listing/viewing tasks  
+- task_update: Updating existing tasks
+- task_complete: Marking tasks as complete
+- calendar_view: Viewing calendar/schedule
+- status_report: Getting project status
+- unknown: If unclear or not task-related
+
+Respond with only the command name."""
+
+        try:
+            response = await self.claude_api.send_message(prompt)
+            return response.strip().lower()
+        except:
+            return "unknown"
+    
+    async def _extract_parameters(self, text: str, command: str) -> Dict:
+        """Extract parameters from voice command using AI"""
+        if command == "unknown":
+            return {}
+        
+        prompt = f"""Extract parameters from this voice command:
+
+Command type: {command}
+Text: "{text}"
+
+For task_create, extract:
+- task_name: Brief task name
+- description: Task description 
+- priority: urgent/high/normal/low
+- due_date: if mentioned (relative like "tomorrow", "next week")
+
+For task_update/task_complete, extract:
+- task_identifier: Task name/keyword to find
+
+For calendar_view, extract:
+- time_range: today/week/month/specific date
+
+Return JSON format with only relevant fields. If nothing clear, return empty object."""
+
+        try:
+            response = await self.claude_api.send_message(prompt)
+            # Try to parse JSON, fallback to empty dict
+            try:
+                return json.loads(response)
+            except:
+                return {}
+        except:
+            return {}
+    
+    def _calculate_confidence(self, text: str, command: str) -> float:
+        """Calculate confidence score for the interpretation"""
+        if command == "unknown":
+            return 0.1
+        
+        text_lower = text.lower()
+        patterns = self.command_patterns.get(command, [])
+        
+        # Check for exact pattern matches
+        for pattern in patterns:
+            if pattern in text_lower:
+                return 0.9
+        
+        # Check for partial matches
+        words = text_lower.split()
+        command_words = command.split('_')
+        
+        matches = sum(1 for word in command_words if word in words)
+        if matches > 0:
+            return 0.6 + (matches * 0.1)
+        
+        return 0.3
+
+class VoiceCommands(commands.Cog):
+    """Voice command functionality for ClickUp bot"""
+    
+    def __init__(self, bot):
+        self.bot = bot
+        self.recognizer = sr.Recognizer()
+        self.active_recordings = {}  # Track active voice sessions
+        
+    async def get_clickup_api(self, guild_id: int) -> Optional[ClickUpAPI]:
+        """Get ClickUp API instance using unified config"""
+        return await UnifiedConfigManager.get_clickup_api(guild_id)
+    
+    async def get_claude_api(self, guild_id: int) -> Optional[ClaudeAPI]:
+        """Get Claude API instance"""
+        try:
+            config = await ClaudeConfigRepository.get_config(guild_id)
+            if config and config.is_enabled:
+                api_key = await ClaudeConfigRepository.get_decrypted_api_key(config)
+                return ClaudeAPI(api_key)
+            return None
+        except Exception as e:
+            logger.error(f"Error getting Claude API: {e}")
+            return None
+    
+    @app_commands.command(name="voice-setup", description="Setup voice commands for the server")
+    @app_commands.default_permissions(administrator=True)
+    async def voice_setup(self, interaction: discord.Interaction):
+        """Setup voice command functionality"""
+        embed = EmbedFactory.create_info_embed(
+            "🎤 Voice Commands Setup",
+            "Voice commands allow you to control ClickUp using your voice!"
+        )
+        
+        embed.add_field(
+            name="Available Commands",
+            value="• **Create Task**: 'Create a task for fixing the login bug'\n"
+                  "• **List Tasks**: 'Show me my tasks'\n"
+                  "• **Update Task**: 'Update the API task to high priority'\n"
+                  "• **Complete Task**: 'Mark the documentation task as complete'\n"
+                  "• **Calendar**: 'Show me this week's calendar'\n"
+                  "• **Status**: 'Give me a status report'",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Requirements",
+            value="✅ ClickUp workspace configured\n"
+                  "✅ Claude AI configured\n"
+                  "🎤 Voice channel access\n"
+                  "🔊 Clear audio input",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Privacy & Security",
+            value="• Voice data is processed temporarily\n"
+                  "• No voice recordings are stored\n"
+                  "• Commands require confirmation\n"
+                  "• Can be disabled anytime",
+            inline=False
+        )
+        
+        class VoiceSetupView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=300)
+            
+            @discord.ui.button(label="Enable Voice Commands", style=discord.ButtonStyle.success)
+            async def enable_voice(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                # Here you would save voice settings to database
+                embed = EmbedFactory.create_success_embed(
+                    "Voice Commands Enabled!",
+                    "🎤 Voice commands are now active for this server!"
+                )
+                embed.add_field(
+                    name="Next Steps",
+                    value="• Use `/voice-command` to start voice control\n"
+                          "• Join a voice channel for better audio\n"
+                          "• Try saying 'Create a task for testing voice commands'",
+                    inline=False
+                )
+                await button_interaction.response.edit_message(embed=embed, view=None)
+            
+            @discord.ui.button(label="Test Voice Recognition", style=discord.ButtonStyle.primary)
+            async def test_voice(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                embed = EmbedFactory.create_info_embed(
+                    "🎤 Voice Test",
+                    "Voice testing would start here. You'd speak a command and see how it's interpreted."
+                )
+                await button_interaction.response.edit_message(embed=embed, view=None)
+        
+        await interaction.response.send_message(embed=embed, view=VoiceSetupView(), ephemeral=True)
+    
+    @app_commands.command(name="voice-command", description="Start voice command mode")
+    async def voice_command(self, interaction: discord.Interaction):
+        """Start voice command session"""
+        # Check prerequisites
+        clickup_api = await self.get_clickup_api(interaction.guild_id)
+        claude_api = await self.get_claude_api(interaction.guild_id)
+        
+        if not clickup_api:
+            embed = EmbedFactory.create_error_embed(
+                "ClickUp Not Configured",
+                "ClickUp must be configured first. Use `/workspace-add`."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        if not claude_api:
+            embed = EmbedFactory.create_error_embed(
+                "Claude AI Not Configured", 
+                "Claude AI must be configured first. Use `/claude-setup`."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Start voice session
+        embed = EmbedFactory.create_info_embed(
+            "🎤 Voice Command Active",
+            "**Ready to listen!** Speak your command now."
+        )
+        
+        embed.add_field(
+            name="Example Commands",
+            value="• 'Create a task for fixing the API bug'\n"
+                  "• 'Show me my high priority tasks'\n"
+                  "• 'Mark the documentation task complete'\n"
+                  "• 'What's my status this week?'",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Tips",
+            value="🎯 Speak clearly and naturally\n"
+                  "⏱️ You have 30 seconds to speak\n"
+                  "🔄 Use buttons below to control recording",
+            inline=False
+        )
+        
+        class VoiceControlView(discord.ui.View):
+            def __init__(self, cog_instance):
+                super().__init__(timeout=300)
+                self.cog = cog_instance
+                self.recording = False
+                self.processed_command = None
+            
+            @discord.ui.button(label="🎤 Start Recording", style=discord.ButtonStyle.success)
+            async def start_recording(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                if self.recording:
+                    await button_interaction.response.send_message("Already recording!", ephemeral=True)
+                    return
+                
+                self.recording = True
+                button.label = "🔴 Recording..."
+                button.disabled = True
+                
+                embed = EmbedFactory.create_info_embed(
+                    "🔴 Recording in Progress",
+                    "**Listening...** Speak your command now!"
+                )
+                await button_interaction.response.edit_message(embed=embed, view=self)
+                
+                # Simulate voice recording and processing
+                await asyncio.sleep(3)  # Simulate recording time
+                
+                # Simulate transcription result
+                mock_transcription = "Create a task for fixing the login bug with high priority"
+                
+                # Process the command
+                processor = VoiceCommandProcessor(claude_api)
+                command_result = await processor.process_voice_command(mock_transcription)
+                
+                self.processed_command = command_result
+                self.recording = False
+                
+                # Show confirmation
+                embed = EmbedFactory.create_info_embed(
+                    "🎤 Voice Command Processed",
+                    f"**Heard:** {mock_transcription}"
+                )
+                
+                embed.add_field(
+                    name="Interpreted As",
+                    value=f"**Command:** {command_result['command']}\n"
+                          f"**Confidence:** {command_result['confidence']*100:.1f}%",
+                    inline=False
+                )
+                
+                if command_result['parameters']:
+                    params_text = ""
+                    for key, value in command_result['parameters'].items():
+                        params_text += f"• **{key.title()}:** {value}\n"
+                    embed.add_field(name="Parameters", value=params_text, inline=False)
+                
+                # Reset button
+                button.label = "🎤 Record Again"
+                button.disabled = False
+                
+                await button_interaction.edit_original_response(embed=embed, view=self)
+            
+            @discord.ui.button(label="✅ Execute Command", style=discord.ButtonStyle.primary, disabled=True)
+            async def execute_command(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                if not self.processed_command:
+                    await button_interaction.response.send_message("No command to execute!", ephemeral=True)
+                    return
+                
+                await button_interaction.response.defer()
+                
+                # Execute the voice command
+                result = await self.cog.execute_voice_command(
+                    button_interaction,
+                    self.processed_command,
+                    clickup_api,
+                    claude_api
+                )
+                
+                if result:
+                    embed = EmbedFactory.create_success_embed(
+                        "✅ Command Executed",
+                        "Voice command completed successfully!"
+                    )
+                else:
+                    embed = EmbedFactory.create_error_embed(
+                        "❌ Command Failed",
+                        "Failed to execute voice command."
+                    )
+                
+                await button_interaction.edit_original_response(embed=embed, view=None)
+            
+            @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+            async def cancel_command(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                embed = EmbedFactory.create_info_embed(
+                    "Voice Command Cancelled",
+                    "Voice command session ended."
+                )
+                await button_interaction.response.edit_message(embed=embed, view=None)
+        
+        control_view = VoiceControlView(self)
+        
+        # Enable execute button when command is processed
+        async def check_for_command():
+            await asyncio.sleep(1)
+            if hasattr(control_view, 'processed_command') and control_view.processed_command:
+                for item in control_view.children:
+                    if item.label == "✅ Execute Command":
+                        item.disabled = False
+                        break
+        
+        await interaction.response.send_message(embed=embed, view=control_view, ephemeral=True)
+    
+    async def execute_voice_command(self, interaction: discord.Interaction, command_data: Dict, clickup_api: ClickUpAPI, claude_api: ClaudeAPI) -> bool:
+        """Execute a processed voice command"""
+        try:
+            command_type = command_data.get('command')
+            parameters = command_data.get('parameters', {})
+            
+            async with clickup_api:
+                if command_type == "task_create":
+                    return await self._execute_task_create(interaction, parameters, clickup_api)
+                elif command_type == "task_list":
+                    return await self._execute_task_list(interaction, parameters, clickup_api)
+                elif command_type == "task_update":
+                    return await self._execute_task_update(interaction, parameters, clickup_api)
+                elif command_type == "task_complete":
+                    return await self._execute_task_complete(interaction, parameters, clickup_api)
+                elif command_type == "calendar_view":
+                    return await self._execute_calendar_view(interaction, parameters, clickup_api)
+                elif command_type == "status_report":
+                    return await self._execute_status_report(interaction, parameters, clickup_api, claude_api)
+                else:
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error executing voice command: {e}")
+            return False
+    
+    async def _execute_task_create(self, interaction: discord.Interaction, params: Dict, clickup_api: ClickUpAPI) -> bool:
+        """Execute voice task creation"""
+        try:
+            # Get first available list (simplified)
+            workspaces = await clickup_api.get_workspaces()
+            if not workspaces:
+                return False
+            
+            workspace_id = workspaces[0]['id']
+            spaces = await clickup_api.get_spaces(workspace_id)
+            if not spaces:
+                return False
+            
+            lists = await clickup_api.get_lists(spaces[0]['id'])
+            if not lists:
+                return False
+            
+            # Create task with voice parameters
+            task_name = params.get('task_name', 'Voice Created Task')
+            description = params.get('description', 'Created via voice command')
+            priority = params.get('priority', 'normal')
+            
+            result = await clickup_api.create_task(
+                lists[0]['id'],
+                name=task_name,
+                description=description,
+                priority={"priority": priority}
+            )
+            
+            return bool(result)
+            
+        except Exception as e:
+            logger.error(f"Error in voice task creation: {e}")
+            return False
+    
+    async def _execute_task_list(self, interaction: discord.Interaction, params: Dict, clickup_api: ClickUpAPI) -> bool:
+        """Execute voice task listing"""
+        # Implementation would show tasks based on voice parameters
+        return True
+    
+    async def _execute_task_update(self, interaction: discord.Interaction, params: Dict, clickup_api: ClickUpAPI) -> bool:
+        """Execute voice task update"""
+        # Implementation would find and update tasks based on voice parameters
+        return True
+    
+    async def _execute_task_complete(self, interaction: discord.Interaction, params: Dict, clickup_api: ClickUpAPI) -> bool:
+        """Execute voice task completion"""
+        # Implementation would find and complete tasks based on voice parameters
+        return True
+    
+    async def _execute_calendar_view(self, interaction: discord.Interaction, params: Dict, clickup_api: ClickUpAPI) -> bool:
+        """Execute voice calendar view"""
+        # Implementation would show calendar based on voice parameters
+        return True
+    
+    async def _execute_status_report(self, interaction: discord.Interaction, params: Dict, clickup_api: ClickUpAPI, claude_api: ClaudeAPI) -> bool:
+        """Execute voice status report"""
+        # Implementation would generate AI status report
+        return True
+    
+    @app_commands.command(name="voice-settings", description="Configure voice command settings")
+    @app_commands.default_permissions(administrator=True)
+    async def voice_settings(self, interaction: discord.Interaction):
+        """Configure voice command settings"""
+        embed = EmbedFactory.create_info_embed(
+            "🎤 Voice Settings",
+            "Configure voice command behavior for your server."
+        )
+        
+        class VoiceSettingsView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=300)
+            
+            @discord.ui.select(
+                placeholder="Select voice language...",
+                options=[
+                    discord.SelectOption(label="English (US)", value="en-US", emoji="🇺🇸"),
+                    discord.SelectOption(label="English (UK)", value="en-GB", emoji="🇬🇧"),
+                    discord.SelectOption(label="Spanish", value="es-ES", emoji="🇪🇸"),
+                    discord.SelectOption(label="French", value="fr-FR", emoji="🇫🇷"),
+                    discord.SelectOption(label="German", value="de-DE", emoji="🇩🇪"),
+                    discord.SelectOption(label="Italian", value="it-IT", emoji="🇮🇹"),
+                    discord.SelectOption(label="Portuguese", value="pt-BR", emoji="🇧🇷"),
+                    discord.SelectOption(label="Japanese", value="ja-JP", emoji="🇯🇵")
+                ]
+            )
+            async def language_select(self, select_interaction: discord.Interaction, select: discord.ui.Select):
+                selected_lang = select.values[0]
+                embed = EmbedFactory.create_success_embed(
+                    "Language Updated",
+                    f"Voice recognition language set to: {select.values[0]}"
+                )
+                await select_interaction.response.edit_message(embed=embed, view=None)
+            
+            @discord.ui.button(label="Sensitivity Settings", style=discord.ButtonStyle.primary)
+            async def sensitivity_settings(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                embed = EmbedFactory.create_info_embed(
+                    "🎚️ Voice Sensitivity",
+                    "Adjust voice recognition sensitivity and confidence thresholds."
+                )
+                
+                embed.add_field(
+                    name="Current Settings",
+                    value="• **Confidence Threshold:** 70%\n"
+                          "• **Recording Timeout:** 30 seconds\n"
+                          "• **Noise Filtering:** Enabled\n"
+                          "• **Auto-execute:** Disabled",
+                    inline=False
+                )
+                
+                await button_interaction.response.edit_message(embed=embed, view=None)
+            
+            @discord.ui.button(label="Disable Voice Commands", style=discord.ButtonStyle.danger)
+            async def disable_voice(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                embed = EmbedFactory.create_warning_embed(
+                    "Voice Commands Disabled",
+                    "Voice commands have been disabled for this server."
+                )
+                await button_interaction.response.edit_message(embed=embed, view=None)
+        
+        await interaction.response.send_message(embed=embed, view=VoiceSettingsView(), ephemeral=True)
+
+# Voice command utilities and helpers
+class VoiceUtils:
+    """Utility functions for voice command processing"""
+    
+    @staticmethod
+    async def transcribe_audio(audio_data: bytes) -> Optional[str]:
+        """Transcribe audio data to text"""
+        try:
+            recognizer = sr.Recognizer()
+            
+            # Convert audio data to AudioFile
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+                temp_file.write(audio_data)
+                temp_file.flush()
+                
+                with sr.AudioFile(temp_file.name) as source:
+                    audio = recognizer.record(source)
+                    
+                # Clean up temp file
+                os.unlink(temp_file.name)
+                
+                # Transcribe using Google Speech Recognition
+                text = recognizer.recognize_google(audio)
+                return text
+                
+        except Exception as e:
+            logger.error(f"Error transcribing audio: {e}")
+            return None
+    
+    @staticmethod
+    def validate_audio_quality(audio_data: bytes) -> Dict[str, any]:
+        """Validate audio quality for transcription"""
+        return {
+            "valid": True,
+            "duration": 5.0,  # Mock duration
+            "quality_score": 0.85,
+            "noise_level": "low",
+            "recommendations": []
+        }
+    
+    @staticmethod
+    async def enhance_audio(audio_data: bytes) -> bytes:
+        """Enhance audio quality for better transcription"""
+        # Mock audio enhancement - in real implementation, this would
+        # apply noise reduction, normalization, etc.
+        return audio_data
+
+async def setup(bot):
+    """Setup function for the cog - DO NOT LOAD YET"""
+    # This file is marked as .future and should not be loaded
+    # await bot.add_cog(VoiceCommands(bot))
+    pass

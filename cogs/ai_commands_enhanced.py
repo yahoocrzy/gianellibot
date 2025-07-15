@@ -18,12 +18,9 @@ class AICommandsEnhanced(commands.Cog):
         self.bot = bot
     
     async def get_clickup_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance using new workspace system"""
-        workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
-        if workspace:
-            token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
-            return ClickUpAPI(token)
-        return None
+        """Get ClickUp API instance using unified config"""
+        from utils.unified_config import UnifiedConfigManager
+        return await UnifiedConfigManager.get_clickup_api(guild_id)
     
     async def get_claude_api(self, guild_id: int) -> Optional[ClaudeAPI]:
         """Get Claude API instance"""
