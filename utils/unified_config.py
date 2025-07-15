@@ -19,6 +19,7 @@ class UnifiedConfigManager:
         try:
             # Try new multi-workspace system first
             workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+            logger.debug(f"New system workspace check for guild {guild_id}: {workspace is not None}")
             if workspace:
                 try:
                     token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
@@ -33,6 +34,7 @@ class UnifiedConfigManager:
             # Fall back to old system
             server_repo = ServerConfigRepository()
             config = await server_repo.get_config(guild_id)
+            logger.debug(f"Legacy system config check for guild {guild_id}: config={config is not None}, token={config.get('clickup_token_encrypted') is not None if config else False}")
             if config and config.get('clickup_token_encrypted'):
                 try:
                     from services.security import decrypt_token
@@ -44,6 +46,7 @@ class UnifiedConfigManager:
                     return api
                 except Exception as e:
                     logger.warning(f"Legacy system failed for guild {guild_id}: {e}")
+                    logger.debug(f"Legacy system token: {config['clickup_token_encrypted'][:20]}... (truncated)")
             
             logger.info(f"No working ClickUp configuration found for guild {guild_id}")
             return None
