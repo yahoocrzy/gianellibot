@@ -33,10 +33,10 @@ class UnifiedConfigManager:
             # Fall back to old system
             server_repo = ServerConfigRepository()
             config = await server_repo.get_config(guild_id)
-            if config and config.clickup_token_encrypted:
+            if config and config.get('clickup_token_encrypted'):
                 try:
                     from services.security import decrypt_token
-                    token = await decrypt_token(config.clickup_token_encrypted)
+                    token = await decrypt_token(config['clickup_token_encrypted'])
                     api = ClickUpAPI(token)
                     # Test the API quickly
                     await api.get_workspaces()
@@ -64,7 +64,7 @@ class UnifiedConfigManager:
             # Check old system
             server_repo = ServerConfigRepository()
             config = await server_repo.get_config(guild_id)
-            if config and config.clickup_token_encrypted:
+            if config and config.get('clickup_token_encrypted'):
                 return True
             
             return False
@@ -89,13 +89,13 @@ class UnifiedConfigManager:
             # Get old configuration
             server_repo = ServerConfigRepository()
             config = await server_repo.get_config(guild_id)
-            if not config or not config.clickup_token_encrypted:
+            if not config or not config.get('clickup_token_encrypted'):
                 logger.info(f"No legacy configuration found for guild {guild_id}")
                 return False
             
             # Decrypt old token
             from services.security import decrypt_token
-            token = await decrypt_token(config.clickup_token_encrypted)
+            token = await decrypt_token(config['clickup_token_encrypted'])
             
             # Test token and get workspace info
             api = ClickUpAPI(token)
@@ -107,10 +107,10 @@ class UnifiedConfigManager:
             
             # Find the workspace that matches the old config
             target_workspace = None
-            if config.clickup_workspace_id:
+            if config.get('clickup_workspace_id'):
                 # Find workspace by ID
                 target_workspace = next(
-                    (ws for ws in workspaces if ws['id'] == config.clickup_workspace_id), 
+                    (ws for ws in workspaces if ws['id'] == config['clickup_workspace_id']), 
                     None
                 )
             
@@ -169,9 +169,9 @@ class UnifiedConfigManager:
             # Check legacy system
             server_repo = ServerConfigRepository()
             config = await server_repo.get_config(guild_id)
-            if config and config.clickup_token_encrypted:
+            if config and config.get('clickup_token_encrypted'):
                 status["has_legacy_system"] = True
-                status["legacy_workspace_id"] = config.clickup_workspace_id
+                status["legacy_workspace_id"] = config.get('clickup_workspace_id')
             
             # Test if we can get a working API
             api = await UnifiedConfigManager.get_clickup_api(guild_id)
