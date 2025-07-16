@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from utils.embed_factory import EmbedFactory
 from loguru import logger
 
@@ -19,11 +19,11 @@ class ConfigHealth(commands.Cog):
         
         try:
             # Check if workspaces are configured
-            workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+            workspaces = await ClickUpOAuthWorkspaceRepository.get_all_workspaces(interaction.guild_id)
             
             if workspaces:
                 # Get default workspace
-                default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+                default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
                 
                 embed = EmbedFactory.create_success_embed(
                     "✅ Configuration Healthy",

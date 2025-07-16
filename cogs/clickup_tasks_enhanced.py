@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime
 from services.clickup_api import ClickUpAPI
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from utils.embed_factory import EmbedFactory
 from utils.enhanced_selections import (
     ListSelectView, TaskSelectView, UserSelectView, 
@@ -22,14 +22,14 @@ class ClickUpTasksEnhanced(commands.Cog):
         self.cache_ttl = 300  # 5 minutes
     
     async def get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance for the guild using workspace repository"""
+        """Get ClickUp API instance for the guild using OAuth2 workspace repository"""
         # Get default workspace
-        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
         if not default_workspace:
             return None
             
-        # Get decrypted token
-        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        # Get OAuth2 access token
+        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
         if not token:
             return None
             
@@ -245,7 +245,7 @@ class ClickUpTasksEnhanced(commands.Cog):
             assignee_ids = []
             if assign_choice.assign:
                 # Get workspace ID
-                workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+                workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
                 if workspace:
                     user_view = UserSelectView(api, workspace.workspace_id)
                     await user_view.start(interaction)
@@ -573,7 +573,7 @@ class ClickUpTasksEnhanced(commands.Cog):
             
             # Assignee update
             if update_choice.update_assignee:
-                workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+                workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
                 if workspace:
                     user_view = UserSelectView(api, workspace.workspace_id)
                     await user_view.start(interaction)
@@ -627,7 +627,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         
         async with api:
             # Get the default workspace from the repository
-            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if not default_workspace:
                 embed = EmbedFactory.create_error_embed(
                     "No Default Workspace",

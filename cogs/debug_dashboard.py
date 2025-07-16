@@ -17,7 +17,7 @@ from utils.debug_logger import debug_logger
 from database.models import async_session, ServerConfig, ClickUpWorkspace, ClaudeConfig
 from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 
 class DebugDashboard(commands.Cog):
     """Debug and diagnostic commands for bot administrators"""
@@ -205,9 +205,9 @@ class DebugDashboard(commands.Cog):
             
             # Test workspace repository config
             try:
-                default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+                default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
                 if default_workspace:
-                    token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+                    token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
                     if token:
                         api = ClickUpAPI(token)
                         embed.add_field(
@@ -251,9 +251,9 @@ class DebugDashboard(commands.Cog):
         
         # Test ClickUp API using workspace repository
         try:
-            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if default_workspace:
-                token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+                token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
                 api = ClickUpAPI(token) if token else None
             else:
                 api = None
@@ -285,6 +285,7 @@ class DebugDashboard(commands.Cog):
             async with async_session() as session:
                 claude_config = await session.get(ClaudeConfig, interaction.guild_id)
                 if claude_config and claude_config.is_enabled:
+                    # Note: Claude API still uses encrypted storage - will be updated later
                     from services.security import decrypt_token
                     api_key = await decrypt_token(claude_config.api_key_encrypted)
                     claude_api = ClaudeAPI(api_key)

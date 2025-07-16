@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from repositories.claude_config import ClaudeConfigRepository
 from utils.embed_factory import EmbedFactory
 from utils.enhanced_selections import ListSelectView, TaskSelectView, UserSelectView
@@ -210,14 +210,14 @@ class AICompleteDropdown(commands.Cog):
         """AI command with dropdown interface"""
         
         # Check configuration using workspace repository
-        from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+        from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
         
         # Get default workspace and API
-        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
         if not default_workspace:
             clickup_api = None
         else:
-            token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+            token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
             clickup_api = ClickUpAPI(token) if token else None
         if not clickup_api:
             embed = EmbedFactory.create_error_embed(
@@ -448,7 +448,7 @@ class AICompleteDropdown(commands.Cog):
         
         # Get all tasks
         try:
-            workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if not workspace:
                 embed = EmbedFactory.create_error_embed(
                     "No Workspace",

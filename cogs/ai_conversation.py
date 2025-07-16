@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime, timedelta
 from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from repositories.claude_config import ClaudeConfigRepository
 from utils.embed_factory import EmbedFactory
 from loguru import logger
@@ -24,14 +24,14 @@ class AIConversation(commands.Cog):
         """Start a conversational AI session"""
         
         # Check configuration using workspace repository
-        from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+        from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
         
         # Get default workspace and API
-        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
         if not default_workspace:
             clickup_api = None
         else:
-            token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+            token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
             clickup_api = ClickUpAPI(token) if token else None
         if not clickup_api:
             embed = EmbedFactory.create_error_embed(
@@ -56,7 +56,7 @@ class AIConversation(commands.Cog):
         
         # Get workspace information
         try:
-            workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             workspace_id = workspace.workspace_id if workspace else None
         except Exception as e:
             logger.error(f"Error getting workspace: {e}")
@@ -122,13 +122,13 @@ class AIConversation(commands.Cog):
         })
         
         # Get APIs using workspace repository
-        from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+        from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
         
-        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
         if not default_workspace:
             return "❌ ClickUp not configured properly."
             
-        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
         if not token:
             return "❌ ClickUp not configured properly."
             

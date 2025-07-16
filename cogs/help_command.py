@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from utils.embed_factory import EmbedFactory
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from repositories.claude_config import ClaudeConfigRepository
 
 class HelpCommand(commands.Cog):
@@ -15,7 +15,7 @@ class HelpCommand(commands.Cog):
     async def help_command(self, interaction: discord.Interaction):
         """Show help information"""
         # Check configuration status
-        workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+        workspaces = await ClickUpOAuthWorkspaceRepository.get_all_workspaces(interaction.guild_id)
         claude_config = await ClaudeConfigRepository.get_config(interaction.guild_id)
         
         embed = EmbedFactory.create_info_embed(

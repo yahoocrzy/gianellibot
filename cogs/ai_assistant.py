@@ -7,7 +7,7 @@ from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
 from repositories.claude_config import ClaudeConfigRepository
 from utils.embed_factory import EmbedFactory
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from loguru import logger
 
 class AIAssistant(commands.Cog):
@@ -19,12 +19,12 @@ class AIAssistant(commands.Cog):
     async def get_clickup_api(self, guild_id: int) -> Optional[ClickUpAPI]:
         """Get ClickUp API instance using workspace repository"""
         # Get default workspace
-        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
         if not default_workspace:
             return None
             
         # Get decrypted token
-        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
         if not token:
             return None
             
@@ -224,7 +224,7 @@ Respond with only valid JSON."""
             
             # Now select list and create the task
             # Get the default workspace
-            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if not default_workspace:
                 embed = EmbedFactory.create_error_embed("No Default Workspace", "No default workspace set. Run `/clickup-setup` first.")
                 await interaction.edit_original_response(embed=embed)
@@ -336,7 +336,7 @@ Respond with only valid JSON."""
         
         try:
             # Get tasks from the default workspace only
-            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if not default_workspace:
                 embed = EmbedFactory.create_error_embed("No Default Workspace", "No default workspace set. Run `/clickup-setup` first.")
                 await interaction.edit_original_response(embed=embed)
@@ -485,7 +485,7 @@ Keep it concise and actionable. Max 300 words."""
         
         try:
             # Basic workflow analysis using default workspace
-            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             workspace_info = f"workspace '{default_workspace.workspace_name}'" if default_workspace else "no configured workspace"
             
             prompt = f"""Provide 3-4 brief workflow improvement suggestions for a team using ClickUp with {workspace_info}.

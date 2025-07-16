@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 from utils.embed_factory import EmbedFactory
 from repositories.server_config import ServerConfigRepository
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from repositories.claude_config import ClaudeConfigRepository
 from loguru import logger
 
@@ -179,7 +179,7 @@ class HelpPin(commands.Cog):
         """Create comprehensive help embed"""
         
         # Check configuration status
-        workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(guild_id)
+        workspaces = await ClickUpOAuthWorkspaceRepository.get_all_workspaces(guild_id)
         claude_config = await ClaudeConfigRepository.get_config(guild_id)
         
         # Create main embed

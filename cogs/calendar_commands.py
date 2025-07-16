@@ -5,7 +5,7 @@ from typing import Optional, List, Dict
 from datetime import datetime, timedelta, date
 import calendar
 from services.clickup_api import ClickUpAPI
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from utils.embed_factory import EmbedFactory
 from utils.enhanced_selections import ListSelectView
 from loguru import logger
@@ -286,12 +286,12 @@ class CalendarCommands(commands.Cog):
         from services.clickup_api import ClickUpAPI
         
         # Get default workspace
-        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
         if not default_workspace:
             return None
             
         # Get decrypted token
-        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
         if not token:
             return None
             
@@ -434,7 +434,7 @@ class CalendarCommands(commands.Cog):
                 all_tasks = []
                 
                 # Get the default workspace from the repository
-                default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+                default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
                 if not default_workspace:
                     embed = EmbedFactory.create_error_embed(
                         "No Default Workspace",
@@ -602,7 +602,7 @@ class CalendarCommands(commands.Cog):
                 all_tasks = []
                 
                 # Get the default workspace from the repository
-                default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+                default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
                 if not default_workspace:
                     embed = EmbedFactory.create_error_embed(
                         "No Default Workspace",
@@ -792,7 +792,7 @@ class CalendarCommands(commands.Cog):
         
         async with api:
             # Get all workspaces
-            workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+            workspaces = await ClickUpOAuthWorkspaceRepository.get_all_workspaces(interaction.guild_id)
             
             if not workspaces:
                 embed = EmbedFactory.create_error_embed(
@@ -812,7 +812,7 @@ class CalendarCommands(commands.Cog):
             for workspace in workspaces:
                 try:
                     # Get API for this workspace
-                    ws_token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
+                    ws_token = await ClickUpOAuthWorkspaceRepository.get_access_token(workspace)
                     ws_api = ClickUpAPI(ws_token)
                     
                     async with ws_api:

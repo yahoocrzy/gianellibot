@@ -1,7 +1,7 @@
 import discord
 from typing import Optional, List, Dict
 from services.clickup_api import ClickUpAPI
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from utils.embed_factory import EmbedFactory
 from loguru import logger
 
@@ -20,7 +20,7 @@ class ListSelectView(discord.ui.View):
         """Start the selection process"""
         try:
             # Use the default workspace instead of checking all API workspaces
-            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if not default_workspace:
                 embed = EmbedFactory.create_error_embed(
                     "No Default Workspace",

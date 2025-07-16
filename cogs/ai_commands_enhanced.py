@@ -5,7 +5,7 @@ from typing import Optional
 import json
 from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
-from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
 from repositories.claude_config import ClaudeConfigRepository
 from utils.embed_factory import EmbedFactory
 from utils.enhanced_selections import ListSelectView
@@ -19,15 +19,15 @@ class AICommandsEnhanced(commands.Cog):
     
     async def get_clickup_api(self, guild_id: int) -> Optional[ClickUpAPI]:
         """Get ClickUp API instance using workspace repository"""
-        from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+        from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
         
         # Get default workspace
-        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
         if not default_workspace:
             return None
             
         # Get decrypted token
-        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
         if not token:
             return None
             
