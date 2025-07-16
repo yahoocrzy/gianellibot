@@ -627,109 +627,108 @@ class ClickUpTasksEnhanced(commands.Cog):
                 await interaction.followup.send(embed=embed)
                 return
             
-            # For single workspace, skip to space selection
-            if len(workspaces) == 1:
-                workspace_id = workspaces[0]['id']
-                
-                # Get spaces
-                spaces = await api.get_spaces(workspace_id)
-                if not spaces:
-                    embed = EmbedFactory.create_error_embed(
-                        "No Spaces",
-                        "No spaces found in workspace."
-                    )
-                    await interaction.followup.send(embed=embed)
-                    return
-                
-                # Check cache first
-                import time
-                cache_key = f"{interaction.guild_id}_{workspace_id}"
-                cached_data = self.list_cache.get(cache_key)
-                
-                if cached_data and (time.time() - cached_data['timestamp']) < self.cache_ttl:
-                    all_lists = cached_data['lists']
-                else:
-                    # Get all lists from all spaces for quick selection
-                    all_lists = []
-                    # Limit to avoid timeout
-                    for space in spaces[:2]:  # Reduced to 2 spaces
-                        try:
-                            lists = await api.get_lists(space['id'])
-                            for lst in lists[:10]:  # Limit lists per space
-                                lst['space_name'] = space['name']
-                                all_lists.append(lst)
-                        except Exception as e:
-                            logger.warning(f"Failed to get lists for space {space['name']}: {e}")
-                            continue
-                    
-                    # Cache the results
-                    self.list_cache[cache_key] = {
-                        'lists': all_lists,
-                        'timestamp': time.time()
-                    }
-                
-                if not all_lists:
-                    embed = EmbedFactory.create_error_embed(
-                        "No Lists",
-                        "No lists found in any space."
-                    )
-                    await interaction.followup.send(embed=embed)
-                    return
-                
-                # Show list selection
-                embed = EmbedFactory.create_info_embed(
-                    "Select List",
-                    "Choose a list to view tasks:"
-                )
-                
-                class QuickListSelect(discord.ui.View):
-                    def __init__(self):
-                        super().__init__(timeout=180)
-                        self.selected_list = None
-                        
-                        options = []
-                        for lst in all_lists[:25]:
-                            options.append(
-                                discord.SelectOption(
-                                    label=lst['name'],
-                                    value=lst['id'],
-                                    description=f"Space: {lst.get('space_name', 'Unknown')}"
-                                )
-                            )
-                        
-                        select = discord.ui.Select(
-                            placeholder="Choose a list...",
-                            options=options
-                        )
-                        select.callback = self.select_callback
-                        self.add_item(select)
-                    
-                    async def select_callback(self, select_interaction: discord.Interaction):
-                        self.selected_list = next((l for l in all_lists if l['id'] == select_interaction.data['values'][0]), None)
-                        self.stop()
-                        await select_interaction.response.defer_update()
-                
-                list_select = QuickListSelect()
-                await interaction.followup.send(embed=embed, view=list_select)
-                
-                timed_out = await list_select.wait()
-                
-                if timed_out or not list_select.selected_list:
-                    if timed_out:
-                        embed = EmbedFactory.create_error_embed("Timeout", "Selection timed out. Please try again.")
-                        await interaction.edit_original_response(embed=embed, view=None)
-                    return
-                
-                selected_list = list_select.selected_list
-            else:
-                # Multiple workspaces - need full selection flow
-                # This would need to be implemented with proper multi-step selection
+            # Get the default workspace from the repository instead
+            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            if not default_workspace:
                 embed = EmbedFactory.create_error_embed(
-                    "Multiple Workspaces",
-                    "Please use `/workspace-switch` to set a default workspace first."
+                    "No Default Workspace",
+                    "No default workspace set. Run `/clickup-setup` first."
                 )
                 await interaction.followup.send(embed=embed)
                 return
+            
+            workspace_id = default_workspace.workspace_id
+            
+            # Get spaces from the default workspace
+            spaces = await api.get_spaces(workspace_id)
+            if not spaces:
+                embed = EmbedFactory.create_error_embed(
+                    "No Spaces",
+                    "No spaces found in workspace."
+                )
+                await interaction.followup.send(embed=embed)
+                return
+            
+            # Check cache first
+            import time
+            cache_key = f"{interaction.guild_id}_{workspace_id}"
+            cached_data = self.list_cache.get(cache_key)
+            
+            if cached_data and (time.time() - cached_data['timestamp']) < self.cache_ttl:
+                all_lists = cached_data['lists']
+            else:
+                # Get all lists from all spaces for quick selection
+                all_lists = []
+                # Limit to avoid timeout
+                for space in spaces[:2]:  # Reduced to 2 spaces
+                    try:
+                        lists = await api.get_lists(space['id'])
+                        for lst in lists[:10]:  # Limit lists per space
+                            lst['space_name'] = space['name']
+                            all_lists.append(lst)
+                    except Exception as e:
+                        logger.warning(f"Failed to get lists for space {space['name']}: {e}")
+                        continue
+                
+                # Cache the results
+                self.list_cache[cache_key] = {
+                    'lists': all_lists,
+                    'timestamp': time.time()
+                }
+                
+            if not all_lists:
+                embed = EmbedFactory.create_error_embed(
+                    "No Lists",
+                    "No lists found in any space."
+                )
+                await interaction.followup.send(embed=embed)
+                return
+            
+            # Show list selection
+            embed = EmbedFactory.create_info_embed(
+                "Select List",
+                "Choose a list to view tasks:"
+            )
+            
+            class QuickListSelect(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=180)
+                    self.selected_list = None
+                    
+                    options = []
+                    for lst in all_lists[:25]:
+                        options.append(
+                            discord.SelectOption(
+                                label=lst['name'],
+                                value=lst['id'],
+                                description=f"Space: {lst.get('space_name', 'Unknown')}"
+                            )
+                        )
+                    
+                    select = discord.ui.Select(
+                        placeholder="Choose a list...",
+                        options=options
+                    )
+                    select.callback = self.select_callback
+                    self.add_item(select)
+                
+                async def select_callback(self, select_interaction: discord.Interaction):
+                    self.selected_list = next((l for l in all_lists if l['id'] == select_interaction.data['values'][0]), None)
+                    self.stop()
+                    await select_interaction.response.defer_update()
+            
+            list_select = QuickListSelect()
+            await interaction.followup.send(embed=embed, view=list_select)
+            
+            timed_out = await list_select.wait()
+            
+            if timed_out or not list_select.selected_list:
+                if timed_out:
+                    embed = EmbedFactory.create_error_embed("Timeout", "Selection timed out. Please try again.")
+                    await interaction.edit_original_response(embed=embed, view=None)
+                return
+            
+            selected_list = list_select.selected_list
             
             # Fetch tasks
             embed = EmbedFactory.create_info_embed(

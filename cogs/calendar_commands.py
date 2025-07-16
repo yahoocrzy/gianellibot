@@ -410,7 +410,7 @@ class CalendarCommands(commands.Cog):
             target_month = date_view.month
             target_year = date_view.year
             
-            # Fetch ALL tasks from ALL lists automatically
+            # Fetch ALL tasks from the default workspace
             embed = EmbedFactory.create_info_embed(
                 "Loading Calendar",
                 "⏳ Loading all tasks for calendar view..."
@@ -418,29 +418,38 @@ class CalendarCommands(commands.Cog):
             await interaction.edit_original_response(embed=embed, view=None)
             
             try:
-                # Get all tasks from all workspaces and lists
+                # Get all tasks from the default workspace only
                 all_tasks = []
                 
-                workspaces = await api.get_workspaces()
-                for workspace in workspaces:
-                    try:
-                        spaces = await api.get_spaces(workspace['id'])
-                        for space in spaces[:3]:  # Limit spaces to prevent timeout
-                            try:
-                                lists = await api.get_lists(space['id'])
-                                for lst in lists[:5]:  # Limit lists per space
-                                    try:
-                                        tasks = await api.get_tasks(lst['id'])
-                                        all_tasks.extend(tasks)
-                                    except Exception as e:
-                                        logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
-                                        continue
-                            except Exception as e:
-                                logger.warning(f"Failed to get lists from space {space['name']}: {e}")
-                                continue
-                    except Exception as e:
-                        logger.warning(f"Failed to get spaces from workspace {workspace['name']}: {e}")
-                        continue
+                # Get the default workspace from the repository
+                default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+                if not default_workspace:
+                    embed = EmbedFactory.create_error_embed(
+                        "No Default Workspace",
+                        "No default workspace set. Run `/clickup-setup` first."
+                    )
+                    await interaction.edit_original_response(embed=embed, view=None)
+                    return
+                
+                workspace_id = default_workspace.workspace_id
+                
+                try:
+                    spaces = await api.get_spaces(workspace_id)
+                    for space in spaces[:3]:  # Limit spaces to prevent timeout
+                        try:
+                            lists = await api.get_lists(space['id'])
+                            for lst in lists[:5]:  # Limit lists per space
+                                try:
+                                    tasks = await api.get_tasks(lst['id'])
+                                    all_tasks.extend(tasks)
+                                except Exception as e:
+                                    logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
+                                    continue
+                        except Exception as e:
+                            logger.warning(f"Failed to get lists from space {space['name']}: {e}")
+                            continue
+                except Exception as e:
+                    logger.warning(f"Failed to get spaces from workspace {workspace_id}: {e}")
                 
                 # Organize all tasks by date
                 tasks_by_date = {}
@@ -535,7 +544,7 @@ class CalendarCommands(commands.Cog):
                 
             days = days_view.days
             
-            # Fetch ALL tasks automatically
+            # Fetch ALL tasks from default workspace automatically
             embed = EmbedFactory.create_info_embed(
                 "Loading Upcoming Tasks",
                 f"⏳ Loading all tasks for the next {days} days..."
@@ -543,29 +552,38 @@ class CalendarCommands(commands.Cog):
             await interaction.edit_original_response(embed=embed, view=None)
             
             try:
-                # Get all tasks from all workspaces and lists
+                # Get all tasks from the default workspace only
                 all_tasks = []
                 
-                workspaces = await api.get_workspaces()
-                for workspace in workspaces:
-                    try:
-                        spaces = await api.get_spaces(workspace['id'])
-                        for space in spaces[:3]:  # Limit spaces to prevent timeout
-                            try:
-                                lists = await api.get_lists(space['id'])
-                                for lst in lists[:5]:  # Limit lists per space
-                                    try:
-                                        tasks = await api.get_tasks(lst['id'])
-                                        all_tasks.extend(tasks)
-                                    except Exception as e:
-                                        logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
-                                        continue
-                            except Exception as e:
-                                logger.warning(f"Failed to get lists from space {space['name']}: {e}")
-                                continue
-                    except Exception as e:
-                        logger.warning(f"Failed to get spaces from workspace {workspace['name']}: {e}")
-                        continue
+                # Get the default workspace from the repository
+                default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+                if not default_workspace:
+                    embed = EmbedFactory.create_error_embed(
+                        "No Default Workspace",
+                        "No default workspace set. Run `/clickup-setup` first."
+                    )
+                    await interaction.edit_original_response(embed=embed, view=None)
+                    return
+                
+                workspace_id = default_workspace.workspace_id
+                
+                try:
+                    spaces = await api.get_spaces(workspace_id)
+                    for space in spaces[:3]:  # Limit spaces to prevent timeout
+                        try:
+                            lists = await api.get_lists(space['id'])
+                            for lst in lists[:5]:  # Limit lists per space
+                                try:
+                                    tasks = await api.get_tasks(lst['id'])
+                                    all_tasks.extend(tasks)
+                                except Exception as e:
+                                    logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
+                                    continue
+                        except Exception as e:
+                            logger.warning(f"Failed to get lists from space {space['name']}: {e}")
+                            continue
+                except Exception as e:
+                    logger.warning(f"Failed to get spaces from workspace {workspace_id}: {e}")
                 
                 # Filter for upcoming tasks
                 now = datetime.now()
