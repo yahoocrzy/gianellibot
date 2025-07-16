@@ -42,12 +42,18 @@ class WorkspaceManagement(commands.Cog):
                     # Test the token and get workspace info
                     api = ClickUpAPI(token)
                     async with api:
+                        logger.info(f"Testing ClickUp API token for guild {modal_interaction.guild_id}")
                         workspaces = await api.get_workspaces()
+                        logger.info(f"ClickUp API returned {len(workspaces)} workspaces")
                     
                     if not workspaces:
                         embed = EmbedFactory.create_error_embed(
                             "No Workspaces Found",
-                            "No workspaces found with this token. Please check your API key."
+                            "No workspaces found with this token. Please check your API key.\n\n"
+                            "**Common issues:**\n"
+                            "• Token doesn't start with `pk_`\n"
+                            "• Token is expired or invalid\n"
+                            "• You don't have access to any workspaces"
                         )
                         await modal_interaction.followup.send(embed=embed, ephemeral=True)
                         return
@@ -159,9 +165,30 @@ class WorkspaceManagement(commands.Cog):
                 
                 except Exception as e:
                     logger.error(f"Error adding workspace: {e}")
+                    logger.error(f"Error type: {type(e).__name__}")
+                    logger.error(f"Token starts with pk_: {token.startswith('pk_') if token else 'No token'}")
+                    
+                    # Provide specific error messages
+                    error_message = "Failed to add workspace."
+                    
+                    if "401" in str(e) or "Unauthorized" in str(e):
+                        error_message += "\n\n**Issue**: Invalid or expired API token"
+                        error_message += "\n**Solution**: Get a new token from ClickUp Settings → API"
+                    elif "403" in str(e) or "Forbidden" in str(e):
+                        error_message += "\n\n**Issue**: Token doesn't have workspace access"
+                        error_message += "\n**Solution**: Make sure you have admin access to the workspace"
+                    elif "timeout" in str(e).lower() or "network" in str(e).lower():
+                        error_message += "\n\n**Issue**: Network connection problem"
+                        error_message += "\n**Solution**: Try again in a moment"
+                    elif not token.startswith('pk_'):
+                        error_message += "\n\n**Issue**: Invalid token format"
+                        error_message += "\n**Solution**: ClickUp API tokens start with 'pk_'"
+                    else:
+                        error_message += f"\n\n**Error**: {str(e)}"
+                    
                     embed = EmbedFactory.create_error_embed(
                         "Error Adding Workspace",
-                        f"Failed to add workspace: {str(e)}"
+                        error_message
                     )
                     await modal_interaction.followup.send(embed=embed, ephemeral=True)
         

@@ -48,7 +48,7 @@ class ClickUpAPI:
                 
                 if response.status >= 400:
                     logger.error(f"API error: {response.status} - {data}")
-                    raise Exception(f"ClickUp API error: {data}")
+                    raise Exception(f"ClickUp API error {response.status}: {data}")
                 
                 return data
         except aiohttp.ClientError as e:
@@ -58,8 +58,11 @@ class ClickUpAPI:
     # Workspace & Teams
     async def get_workspaces(self) -> List[Dict[str, Any]]:
         """Get all workspaces"""
+        logger.info("Fetching workspaces from ClickUp API")
         data = await self._request("GET", "team")
-        return data.get("teams", [])
+        teams = data.get("teams", [])
+        logger.info(f"ClickUp API returned {len(teams)} teams/workspaces")
+        return teams
     
     # Spaces
     async def get_spaces(self, workspace_id: str) -> List[Dict[str, Any]]:
