@@ -153,9 +153,7 @@ class DebugDashboard(commands.Cog):
                     embed.add_field(
                         name="Server Config",
                         value=f"**Prefix:** {server_config.prefix}\n"
-                              f"**Setup Complete:** {server_config.setup_complete}\n"
-                              f"**Claude Enabled:** {server_config.claude_enabled}\n"
-                              f"**Has Legacy Token:** {'Yes' if server_config.clickup_token_encrypted else 'No'}",
+                              f"**Claude Enabled:** {server_config.claude_enabled}",
                         inline=False
                     )
                 else:

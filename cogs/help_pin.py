@@ -208,7 +208,7 @@ class HelpPin(commands.Cog):
             embed.add_field(
                 name="🚀 Quick Start",
                 value=(
-                    "1️⃣ Run `/workspace-add` to connect ClickUp\n"
+                    "1️⃣ Run `/clickup-setup` to connect ClickUp\n"
                     "2️⃣ Run `/claude-setup` to enable AI features\n"
                     "3️⃣ Start using `/task-create` to manage tasks!"
                 ),
@@ -362,7 +362,8 @@ class InteractiveHelpView(discord.ui.View):
         )
         
         commands = [
-            ("**/workspace-add**", "Add a new ClickUp workspace"),
+            ("**/clickup-setup**", "Complete ClickUp setup and configuration"),
+            ("**/workspace-add**", "Add additional ClickUp workspaces"),
             ("**/workspace-list**", "View all configured workspaces"),
             ("**/workspace-switch**", "Change default workspace"),
             ("**/workspace-remove**", "Remove a workspace")

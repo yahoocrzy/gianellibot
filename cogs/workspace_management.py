@@ -13,12 +13,63 @@ class WorkspaceManagement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    @app_commands.command(name="workspace-add", description="Add a new ClickUp workspace")
+    @app_commands.command(name="clickup-setup", description="Set up ClickUp integration for this server")
     @app_commands.default_permissions(administrator=True)
-    async def workspace_add(self, interaction: discord.Interaction):
-        """Add a new ClickUp workspace to the server"""
+    async def clickup_setup(self, interaction: discord.Interaction):
+        """Complete ClickUp setup - checks status and guides through configuration"""
         
-        # Show secure token input modal
+        # Check if already configured
+        workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+        
+        if workspaces:
+            # Already configured - show status
+            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            
+            embed = EmbedFactory.create_success_embed(
+                "✅ ClickUp Already Configured",
+                f"ClickUp is ready to use on this server!"
+            )
+            
+            embed.add_field(
+                name="Current Setup",
+                value=f"**Default Workspace**: {default_workspace.workspace_name if default_workspace else 'None'}\n"
+                      f"**Total Workspaces**: {len(workspaces)}\n"
+                      f"**Status**: ✅ Ready to use",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Available Commands",
+                value="• `/task-create` - Create new tasks\n"
+                      "• `/task-list` - View and manage tasks\n"
+                      "• `/calendar` - View tasks in calendar\n"
+                      "• `/workspace-list` - Manage workspaces",
+                inline=False
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Not configured - do the actual setup
+        embed = EmbedFactory.create_info_embed(
+            "🚀 ClickUp Setup",
+            "Let's set up ClickUp for your server. I'll need your ClickUp API token."
+        )
+        
+        embed.add_field(
+            name="Get Your API Token",
+            value="1. Go to [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
+                  "2. Click **API** in the left sidebar\n"
+                  "3. Click **Generate** to create a new token\n"
+                  "4. Copy the token (starts with `pk_`)",
+            inline=False
+        )
+        
+        # Show the same modal as workspace-add
+        await self._show_token_modal(interaction)
+    
+    async def _show_token_modal(self, interaction: discord.Interaction):
+        """Show the token input modal"""
         class TokenModal(discord.ui.Modal, title="ClickUp Workspace Setup"):
             def __init__(self):
                 super().__init__()
@@ -88,9 +139,9 @@ class WorkspaceManagement(commands.Cog):
                                 self.add_item(select)
                             
                             async def select_callback(self, select_interaction: discord.Interaction):
-                                workspace_id = select_interaction.data['values'][0]
                                 self.selected_workspace = next(
-                                    (ws for ws in workspaces if ws['id'] == workspace_id), None
+                                    (ws for ws in workspaces if ws['id'] == select_interaction.data['values'][0]), 
+                                    None
                                 )
                                 self.stop()
                                 await select_interaction.response.defer_update()
@@ -98,19 +149,18 @@ class WorkspaceManagement(commands.Cog):
                         workspace_view = WorkspaceSelect()
                         await modal_interaction.followup.send(embed=embed, view=workspace_view, ephemeral=True)
                         
-                        timed_out = await workspace_view.wait()
+                        await workspace_view.wait()
                         
-                        if timed_out or not workspace_view.selected_workspace:
-                            embed = EmbedFactory.create_error_embed("Timeout", "Workspace selection timed out.")
-                            await modal_interaction.edit_original_response(embed=embed, view=None)
+                        if not workspace_view.selected_workspace:
                             return
                         
                         selected_workspace = workspace_view.selected_workspace
                     else:
+                        # Only one workspace
                         selected_workspace = workspaces[0]
                     
                     # Save the workspace
-                    workspace_config = await ClickUpWorkspaceRepository.create_workspace(
+                    new_workspace = await ClickUpWorkspaceRepository.create_workspace(
                         guild_id=modal_interaction.guild_id,
                         workspace_id=selected_workspace['id'],
                         workspace_name=selected_workspace['name'],
@@ -118,26 +168,21 @@ class WorkspaceManagement(commands.Cog):
                         added_by_user_id=modal_interaction.user.id
                     )
                     
-                    if workspace_config:
-                        embed = EmbedFactory.create_success_embed(
-                            "Workspace Added Successfully!",
-                            f"✅ Added workspace: **{selected_workspace['name']}**"
-                        )
-                        
-                        embed.add_field(
-                            name="Workspace Info",
-                            value=f"• Name: {selected_workspace['name']}\n"
-                                  f"• ID: `{selected_workspace['id']}`\n"
-                                  f"• Added by: {modal_interaction.user.mention}",
-                            inline=False
-                        )
-                        
-                        # Check if this is the first workspace (auto-set as default)
+                    if new_workspace:
+                        # Set as default if it's the first workspace
                         existing_workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(modal_interaction.guild_id)
                         if len(existing_workspaces) == 1:
                             await ClickUpWorkspaceRepository.set_default_workspace(
-                                modal_interaction.guild_id, workspace_config.id
+                                modal_interaction.guild_id, 
+                                new_workspace.id
                             )
+                        
+                        embed = EmbedFactory.create_success_embed(
+                            "✅ ClickUp Setup Complete!",
+                            f"Successfully added workspace: **{selected_workspace['name']}**"
+                        )
+                        
+                        if len(existing_workspaces) == 1:
                             embed.add_field(
                                 name="Default Workspace",
                                 value="✅ This workspace has been set as the default",
@@ -145,31 +190,31 @@ class WorkspaceManagement(commands.Cog):
                             )
                         
                         embed.add_field(
-                            name="Available Commands",
-                            value="• `/task-create` - Create new tasks\n"
-                                  "• `/task-list` - View tasks\n"
-                                  "• `/calendar` - Calendar view\n"
-                                  "• `/workspace-switch` - Switch workspaces",
+                            name="🎉 You're all set! Try these commands:",
+                            value="• `/task-create` - Create your first task\n"
+                                  "• `/task-list` - View existing tasks\n"
+                                  "• `/calendar` - See tasks in calendar view\n"
+                                  "• `/help` - Get full command list",
                             inline=False
                         )
                         
                         await modal_interaction.followup.send(embed=embed, ephemeral=True)
                         
-                        logger.info(f"Workspace {selected_workspace['name']} added to guild {modal_interaction.guild_id}")
+                        logger.info(f"ClickUp setup completed for guild {modal_interaction.guild_id}")
                     else:
                         embed = EmbedFactory.create_error_embed(
-                            "Failed to Add Workspace",
+                            "Setup Failed",
                             "There was an error saving the workspace configuration."
                         )
                         await modal_interaction.followup.send(embed=embed, ephemeral=True)
                 
                 except Exception as e:
-                    logger.error(f"Error adding workspace: {e}")
+                    logger.error(f"Error in ClickUp setup: {e}")
                     logger.error(f"Error type: {type(e).__name__}")
                     logger.error(f"Token starts with pk_: {token.startswith('pk_') if token else 'No token'}")
                     
                     # Provide specific error messages
-                    error_message = "Failed to add workspace."
+                    error_message = "Failed to set up ClickUp."
                     
                     if "401" in str(e) or "Unauthorized" in str(e):
                         error_message += "\n\n**Issue**: Invalid or expired API token"
@@ -187,13 +232,19 @@ class WorkspaceManagement(commands.Cog):
                         error_message += f"\n\n**Error**: {str(e)}"
                     
                     embed = EmbedFactory.create_error_embed(
-                        "Error Adding Workspace",
+                        "Setup Failed",
                         error_message
                     )
                     await modal_interaction.followup.send(embed=embed, ephemeral=True)
         
         modal = TokenModal()
         await interaction.response.send_modal(modal)
+    
+    @app_commands.command(name="workspace-add", description="Add a new ClickUp workspace")
+    @app_commands.default_permissions(administrator=True)
+    async def workspace_add(self, interaction: discord.Interaction):
+        """Add a new ClickUp workspace to the server"""
+        await self._show_token_modal(interaction)
     
     @app_commands.command(name="workspace-list", description="List all configured workspaces")
     async def workspace_list(self, interaction: discord.Interaction):

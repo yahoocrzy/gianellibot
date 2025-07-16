@@ -1,5 +1,5 @@
 """
-Unified configuration system that handles both old and new ClickUp configurations
+Unified configuration system that handles ClickUp workspace configurations
 """
 from typing import Optional
 from services.clickup_api import ClickUpAPI
@@ -8,18 +8,17 @@ from repositories.server_config import ServerConfigRepository
 from loguru import logger
 
 class UnifiedConfigManager:
-    """Manages both old and new configuration systems"""
+    """Manages ClickUp workspace configuration system"""
     
     @staticmethod
     async def get_clickup_api(guild_id: int) -> Optional[ClickUpAPI]:
         """
-        Get ClickUp API instance, checking both new and old configuration systems
-        Returns the first working configuration found
+        Get ClickUp API instance from the workspace system
+        Returns None if no workspace is configured
         """
         try:
-            # Try new multi-workspace system first
+            # Only use the new workspace system
             workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
-            logger.debug(f"New system workspace check for guild {guild_id}: {workspace is not None}")
             if workspace:
                 try:
                     token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
@@ -30,26 +29,7 @@ class UnifiedConfigManager:
                     # Return a new instance since we closed the test one
                     return ClickUpAPI(token)
                 except Exception as e:
-                    logger.warning(f"New system failed for guild {guild_id}: {e}")
-            
-            # Fall back to old system
-            server_repo = ServerConfigRepository()
-            config = await server_repo.get_config(guild_id)
-            logger.debug(f"Legacy system config check for guild {guild_id}: config={config is not None}, token={config.get('clickup_token_encrypted') is not None if config else False}")
-            if config and config.get('clickup_token_encrypted'):
-                try:
-                    from services.security import decrypt_token
-                    token = await decrypt_token(config['clickup_token_encrypted'])
-                    api = ClickUpAPI(token)
-                    # Test the API quickly with proper session management
-                    async with api:
-                        await api.get_workspaces()
-                    # Return a new instance since we closed the test one
-                    logger.info(f"Using legacy system for guild {guild_id}")
-                    return ClickUpAPI(token)
-                except Exception as e:
-                    logger.warning(f"Legacy system failed for guild {guild_id}: {e}")
-                    logger.debug(f"Legacy system token: {config['clickup_token_encrypted'][:20]}... (truncated)")
+                    logger.warning(f"Workspace system failed for guild {guild_id}: {e}")
             
             logger.info(f"No working ClickUp configuration found for guild {guild_id}")
             return None
@@ -60,20 +40,11 @@ class UnifiedConfigManager:
     
     @staticmethod
     async def has_any_configuration(guild_id: int) -> bool:
-        """Check if guild has any ClickUp configuration (old or new)"""
+        """Check if guild has ClickUp workspace configuration"""
         try:
-            # Check new system
+            # Only check the new workspace system
             workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
-            if workspace:
-                return True
-            
-            # Check old system
-            server_repo = ServerConfigRepository()
-            config = await server_repo.get_config(guild_id)
-            if config and config.get('clickup_token_encrypted'):
-                return True
-            
-            return False
+            return workspace is not None
             
         except Exception as e:
             logger.error(f"Error checking configuration for guild {guild_id}: {e}")
@@ -152,44 +123,31 @@ class UnifiedConfigManager:
     
     @staticmethod
     async def get_configuration_status(guild_id: int) -> dict:
-        """Get detailed status of configuration systems"""
+        """Get detailed status of workspace configuration"""
         status = {
-            "has_new_system": False,
-            "has_legacy_system": False,
+            "has_workspace": False,
             "default_workspace": None,
-            "legacy_workspace_id": None,
             "working_api": False,
             "recommendation": "setup_required"
         }
         
         try:
-            # Check new system
+            # Check workspace system
             workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
             if workspace:
-                status["has_new_system"] = True
+                status["has_workspace"] = True
                 status["default_workspace"] = {
                     "id": workspace.workspace_id,
                     "name": workspace.workspace_name
                 }
             
-            # Check legacy system
-            server_repo = ServerConfigRepository()
-            config = await server_repo.get_config(guild_id)
-            if config and config.get('clickup_token_encrypted'):
-                status["has_legacy_system"] = True
-                status["legacy_workspace_id"] = config.get('clickup_workspace_id')
-            
             # Test if we can get a working API
             api = await UnifiedConfigManager.get_clickup_api(guild_id)
             if api:
                 status["working_api"] = True
-                
-                if status["has_new_system"]:
-                    status["recommendation"] = "all_good"
-                elif status["has_legacy_system"]:
-                    status["recommendation"] = "migrate_recommended"
+                status["recommendation"] = "all_good"
             else:
-                if status["has_new_system"] or status["has_legacy_system"]:
+                if status["has_workspace"]:
                     status["recommendation"] = "token_invalid"
                 else:
                     status["recommendation"] = "setup_required"
