@@ -51,8 +51,9 @@ class DebugDashboard(commands.Cog):
             
         # Check database connection
         try:
+            from sqlalchemy import text
             async with async_session() as session:
-                await session.execute("SELECT 1")
+                await session.execute(text("SELECT 1"))
             logger.info("Database connection successful")
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
