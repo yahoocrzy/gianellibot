@@ -617,17 +617,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         
         async with api:
-            # Get workspaces first
-            workspaces = await api.get_workspaces()
-            if not workspaces:
-                embed = EmbedFactory.create_error_embed(
-                    "No Workspaces",
-                    "No workspaces found. Please check your configuration."
-                )
-                await interaction.followup.send(embed=embed)
-                return
-            
-            # Get the default workspace from the repository instead
+            # Get the default workspace from the repository
             default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if not default_workspace:
                 embed = EmbedFactory.create_error_embed(
