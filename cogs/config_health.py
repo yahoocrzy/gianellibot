@@ -83,7 +83,7 @@ class ConfigHealth(commands.Cog):
                         else:
                             embed = EmbedFactory.create_error_embed(
                                 "Migration Failed",
-                                "❌ Migration failed. Please try manually adding workspace with `/workspace-add`."
+                                "❌ Migration failed. Please try manually adding workspace with `/clickup-setup`."
                             )
                         
                         await button_interaction.edit_original_response(embed=embed, view=None)
@@ -106,7 +106,7 @@ class ConfigHealth(commands.Cog):
                 embed.add_field(
                     name="How to Fix",
                     value="1. Get a new API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
-                          "2. Run `/workspace-add` to add it again\n"
+                          "2. Run `/clickup-setup` to add it again\n"
                           "3. Or contact an administrator to fix the configuration",
                     inline=False
                 )
@@ -119,7 +119,7 @@ class ConfigHealth(commands.Cog):
                 embed.add_field(
                     name="Getting Started",
                     value="1. Get your ClickUp API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
-                          "2. Run `/workspace-add` and paste your token\n"
+                          "2. Run `/clickup-setup` and paste your token\n"
                           "3. Select which workspace to use\n"
                           "4. Start using commands like `/calendar` and `/task-create`",
                     inline=False
@@ -186,7 +186,7 @@ class ConfigHealth(commands.Cog):
                 )
                 embed.add_field(
                     name="Alternative",
-                    value="Try manually adding your workspace with `/workspace-add`",
+                    value="Try manually adding your workspace with `/clickup-setup`",
                     inline=False
                 )
             

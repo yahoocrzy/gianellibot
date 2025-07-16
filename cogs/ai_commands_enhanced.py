@@ -49,7 +49,7 @@ class AICommandsEnhanced(commands.Cog):
         if not clickup_api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/workspace-add` to configure workspaces."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` to configure workspaces."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -192,7 +192,7 @@ class AICommandsEnhanced(commands.Cog):
         if not clickup_api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/workspace-add` to configure workspaces."
+                "ClickUp hasn't been set up yet. Use `/clickup-setup` to configure workspaces."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return

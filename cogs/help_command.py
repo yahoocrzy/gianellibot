@@ -37,7 +37,7 @@ class HelpCommand(commands.Cog):
         if not workspaces:
             embed.add_field(
                 name="🚀 Getting Started",
-                value="1. Use `/workspace-add` to add your ClickUp workspace\n"
+                value="1. Use `/clickup-setup` to add your ClickUp workspace\n"
                       "2. Use `/task-create` to create your first task\n"
                       "3. Use `/calendar` to view tasks in a calendar",
                 inline=False
@@ -64,7 +64,8 @@ class HelpCommand(commands.Cog):
         # Workspace commands
         embed.add_field(
             name="🏢 Workspace Management",
-            value="• `/workspace-add` - Add workspace\n"
+            value="• `/clickup-setup` - Complete ClickUp setup\n"
+                  "• `/workspace-add` - Add additional workspaces\n"
                   "• `/workspace-list` - View workspaces\n"
                   "• `/workspace-switch` - Change default\n"
                   "• `/workspace-remove` - Remove workspace",

@@ -110,8 +110,36 @@ class ClickUpWorkspaceRepository:
             return result.scalars().all()
     
     @staticmethod
-    async def set_default_workspace(guild_id: int, workspace_id: str) -> bool:
-        """Set a workspace as default"""
+    async def set_default_workspace(guild_id: int, workspace_db_id: int) -> bool:
+        """Set a workspace as default by database ID"""
+        async with async_session() as session:
+            # Unset current default
+            await session.execute(
+                update(ClickUpWorkspace)
+                .where(and_(
+                    ClickUpWorkspace.guild_id == guild_id,
+                    ClickUpWorkspace.is_default == True
+                ))
+                .values(is_default=False)
+            )
+            
+            # Set new default
+            result = await session.execute(
+                update(ClickUpWorkspace)
+                .where(and_(
+                    ClickUpWorkspace.guild_id == guild_id,
+                    ClickUpWorkspace.id == workspace_db_id,
+                    ClickUpWorkspace.is_active == True
+                ))
+                .values(is_default=True)
+            )
+            
+            await session.commit()
+            return result.rowcount > 0
+    
+    @staticmethod
+    async def set_default_workspace_by_clickup_id(guild_id: int, workspace_id: str) -> bool:
+        """Set a workspace as default by ClickUp workspace ID"""
         async with async_session() as session:
             # Unset current default
             await session.execute(
@@ -157,7 +185,7 @@ class ClickUpWorkspaceRepository:
     
     @staticmethod
     async def deactivate_workspace(guild_id: int, workspace_id: str) -> bool:
-        """Deactivate a workspace (soft delete)"""
+        """Deactivate a workspace (soft delete) by ClickUp workspace ID"""
         async with async_session() as session:
             result = await session.execute(
                 update(ClickUpWorkspace)
@@ -170,6 +198,21 @@ class ClickUpWorkspaceRepository:
             
             await session.commit()
             return result.rowcount > 0
+    
+    @staticmethod
+    async def remove_workspace(workspace_db_id: int) -> bool:
+        """Remove a workspace by database ID"""
+        async with async_session() as session:
+            result = await session.execute(
+                select(ClickUpWorkspace).where(ClickUpWorkspace.id == workspace_db_id)
+            )
+            workspace = result.scalar_one_or_none()
+            
+            if workspace:
+                await session.delete(workspace)
+                await session.commit()
+                return True
+            return False
     
     @staticmethod
     async def get_decrypted_token(workspace: ClickUpWorkspace) -> str:
