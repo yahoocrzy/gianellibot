@@ -17,7 +17,7 @@ from utils.debug_logger import debug_logger
 from database.models import async_session, ServerConfig, ClickUpWorkspace, ClaudeConfig
 from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
-from utils.unified_config import UnifiedConfigManager
+from repositories.clickup_workspaces import ClickUpWorkspaceRepository
 
 class DebugDashboard(commands.Cog):
     """Debug and diagnostic commands for bot administrators"""
@@ -203,15 +203,18 @@ class DebugDashboard(commands.Cog):
                         inline=False
                     )
             
-            # Test unified config
+            # Test workspace repository config
             try:
-                api = await UnifiedConfigManager.get_clickup_api(guild_id)
-                if api:
-                    embed.add_field(
-                        name="API Status",
-                        value="✅ ClickUp API accessible via unified config",
-                        inline=False
-                    )
+                default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+                if default_workspace:
+                    token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+                    if token:
+                        api = ClickUpAPI(token)
+                        embed.add_field(
+                            name="API Status", 
+                            value="✅ ClickUp API accessible via workspace repository",
+                            inline=False
+                        )
                 else:
                     embed.add_field(
                         name="API Status",
@@ -246,9 +249,15 @@ class DebugDashboard(commands.Cog):
             timestamp=datetime.utcnow()
         )
         
-        # Test ClickUp API
+        # Test ClickUp API using workspace repository
         try:
-            api = await UnifiedConfigManager.get_clickup_api(interaction.guild_id)
+            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            if default_workspace:
+                token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+                api = ClickUpAPI(token) if token else None
+            else:
+                api = None
+                
             if api:
                 async with api:
                     workspaces = await api.get_workspaces()

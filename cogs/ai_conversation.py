@@ -23,9 +23,16 @@ class AIConversation(commands.Cog):
     async def ai_chat(self, interaction: discord.Interaction):
         """Start a conversational AI session"""
         
-        # Check configuration using unified config
-        from utils.unified_config import UnifiedConfigManager
-        clickup_api = await UnifiedConfigManager.get_clickup_api(interaction.guild_id)
+        # Check configuration using workspace repository
+        from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+        
+        # Get default workspace and API
+        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+        if not default_workspace:
+            clickup_api = None
+        else:
+            token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+            clickup_api = ClickUpAPI(token) if token else None
         if not clickup_api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
@@ -114,11 +121,18 @@ class AIConversation(commands.Cog):
             'content': message
         })
         
-        # Get APIs using unified config
-        from utils.unified_config import UnifiedConfigManager
-        clickup_api = await UnifiedConfigManager.get_clickup_api(guild_id)
-        if not clickup_api:
+        # Get APIs using workspace repository
+        from repositories.clickup_workspaces import ClickUpWorkspaceRepository
+        
+        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        if not default_workspace:
             return "❌ ClickUp not configured properly."
+            
+        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        if not token:
+            return "❌ ClickUp not configured properly."
+            
+        clickup_api = ClickUpAPI(token)
         
         api_key = await ClaudeConfigRepository.get_decrypted_api_key(
             await ClaudeConfigRepository.get_config(guild_id)

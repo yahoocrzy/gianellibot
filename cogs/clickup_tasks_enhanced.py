@@ -22,9 +22,18 @@ class ClickUpTasksEnhanced(commands.Cog):
         self.cache_ttl = 300  # 5 minutes
     
     async def get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance for the guild using unified config"""
-        from utils.unified_config import UnifiedConfigManager
-        return await UnifiedConfigManager.get_clickup_api(guild_id)
+        """Get ClickUp API instance for the guild using workspace repository"""
+        # Get default workspace
+        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        if not default_workspace:
+            return None
+            
+        # Get decrypted token
+        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        if not token:
+            return None
+            
+        return ClickUpAPI(token)
     
     @app_commands.command(name="task-create", description="Create a new ClickUp task with dropdown selections only")
     async def task_create(self, interaction: discord.Interaction):

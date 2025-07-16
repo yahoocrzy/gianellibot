@@ -282,9 +282,20 @@ class CalendarCommands(commands.Cog):
         self.bot = bot
     
     async def get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance using unified config"""
-        from utils.unified_config import UnifiedConfigManager
-        return await UnifiedConfigManager.get_clickup_api(guild_id)
+        """Get ClickUp API instance using workspace repository"""
+        from services.clickup_api import ClickUpAPI
+        
+        # Get default workspace
+        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        if not default_workspace:
+            return None
+            
+        # Get decrypted token
+        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        if not token:
+            return None
+            
+        return ClickUpAPI(token)
     
     @app_commands.command(name="calendar", description="View tasks in a calendar format")
     async def calendar_view(self, interaction: discord.Interaction):

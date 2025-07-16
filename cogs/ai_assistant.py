@@ -7,7 +7,7 @@ from services.clickup_api import ClickUpAPI
 from services.claude_api import ClaudeAPI
 from repositories.claude_config import ClaudeConfigRepository
 from utils.embed_factory import EmbedFactory
-from utils.unified_config import UnifiedConfigManager
+from repositories.clickup_workspaces import ClickUpWorkspaceRepository
 from loguru import logger
 
 class AIAssistant(commands.Cog):
@@ -17,8 +17,18 @@ class AIAssistant(commands.Cog):
         self.bot = bot
     
     async def get_clickup_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance using unified config"""
-        return await UnifiedConfigManager.get_clickup_api(guild_id)
+        """Get ClickUp API instance using workspace repository"""
+        # Get default workspace
+        default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(guild_id)
+        if not default_workspace:
+            return None
+            
+        # Get decrypted token
+        token = await ClickUpWorkspaceRepository.get_decrypted_token(default_workspace)
+        if not token:
+            return None
+            
+        return ClickUpAPI(token)
     
     async def get_claude_api(self, guild_id: int) -> Optional[ClaudeAPI]:
         """Get Claude API instance"""
