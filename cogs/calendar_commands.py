@@ -20,6 +20,64 @@ class CalendarView(discord.ui.View):
         self.tasks_by_date = tasks_by_date
         self.api = api
         
+        # Setup initial UI components
+        self.setup_ui_components()
+        
+    def setup_ui_components(self):
+        """Setup the UI components for the calendar view"""
+        # Add navigation buttons
+        # Previous month button
+        prev_btn = discord.ui.Button(label="◀", style=discord.ButtonStyle.primary, row=0)
+        prev_btn.callback = self.previous_month
+        self.add_item(prev_btn)
+        
+        # Today button
+        today_btn = discord.ui.Button(label="Today", style=discord.ButtonStyle.secondary, row=0)
+        today_btn.callback = self.go_to_today
+        self.add_item(today_btn)
+        
+        # Next month button
+        next_btn = discord.ui.Button(label="▶", style=discord.ButtonStyle.primary, row=0)
+        next_btn.callback = self.next_month
+        self.add_item(next_btn)
+        
+        # Add day selector if there are tasks
+        self.add_day_selector()
+        
+    def add_day_selector(self):
+        """Add day selector dropdown for days with tasks"""
+        days_with_tasks = []
+        for date_str in self.tasks_by_date.keys():
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                if date_obj.year == self.year and date_obj.month == self.month:
+                    task_count = len(self.tasks_by_date[date_str])
+                    days_with_tasks.append((date_obj.day, date_str, task_count))
+            except:
+                continue
+        
+        if days_with_tasks:
+            days_with_tasks.sort(key=lambda x: x[0])
+            
+            options = []
+            for day, date_str, count in days_with_tasks[:25]:  # Discord limit
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                options.append(
+                    discord.SelectOption(
+                        label=f"{date_obj.strftime('%B %d')} ({count} tasks)",
+                        value=date_str,
+                        description=f"{count} task(s) due"
+                    )
+                )
+            
+            select = discord.ui.Select(
+                placeholder="Select a day to view tasks...",
+                options=options,
+                row=1
+            )
+            select.callback = self.select_day
+            self.add_item(select)
+        
     def create_calendar_embed(self) -> discord.Embed:
         """Create calendar embed for the current month"""
         # Get month calendar
@@ -123,8 +181,7 @@ class CalendarView(discord.ui.View):
             'low': '🔵'
         }.get(priority, '⚪')
     
-    @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, row=0)
-    async def previous_month(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def previous_month(self, interaction: discord.Interaction):
         """Go to previous month"""
         self.month -= 1
         if self.month < 1:
@@ -133,8 +190,7 @@ class CalendarView(discord.ui.View):
         
         await self.update_calendar(interaction)
     
-    @discord.ui.button(label="Today", style=discord.ButtonStyle.success, row=0)
-    async def go_to_today(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def go_to_today(self, interaction: discord.Interaction):
         """Go to current month"""
         today = datetime.now()
         self.year = today.year
@@ -142,8 +198,7 @@ class CalendarView(discord.ui.View):
         
         await self.update_calendar(interaction)
     
-    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, row=0)
-    async def next_month(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def next_month(self, interaction: discord.Interaction):
         """Go to next month"""
         self.month += 1
         if self.month > 12:
@@ -152,12 +207,6 @@ class CalendarView(discord.ui.View):
         
         await self.update_calendar(interaction)
     
-    @discord.ui.select(
-        placeholder="Select a day to view tasks...",
-        min_values=1,
-        max_values=1,
-        row=1
-    )
     async def select_day(self, interaction: discord.Interaction, select: discord.ui.Select):
         """Show tasks for selected day"""
         selected_date = select.values[0]
@@ -218,46 +267,9 @@ class CalendarView(discord.ui.View):
         # This is a simplified version - in reality you'd refetch tasks
         # For now, we'll just update the display
         
-        # Update day selector
+        # Re-setup UI components
         self.clear_items()
-        
-        # Re-add navigation buttons
-        self.add_item(self.previous_month)
-        self.add_item(self.go_to_today)
-        self.add_item(self.next_month)
-        
-        # Update day selector
-        days_with_tasks = []
-        for date_str in self.tasks_by_date.keys():
-            try:
-                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-                if date_obj.year == self.year and date_obj.month == self.month:
-                    task_count = len(self.tasks_by_date[date_str])
-                    days_with_tasks.append((date_obj.day, date_str, task_count))
-            except:
-                continue
-        
-        if days_with_tasks:
-            days_with_tasks.sort(key=lambda x: x[0])
-            
-            options = []
-            for day, date_str, count in days_with_tasks[:25]:  # Discord limit
-                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-                options.append(
-                    discord.SelectOption(
-                        label=f"{date_obj.strftime('%B %d')} ({count} tasks)",
-                        value=date_str,
-                        description=f"{count} task(s) due"
-                    )
-                )
-            
-            select = discord.ui.Select(
-                placeholder="Select a day to view tasks...",
-                options=options,
-                row=1
-            )
-            select.callback = self.select_day
-            self.add_item(select)
+        self.setup_ui_components()
         
         embed = self.create_calendar_embed()
         await interaction.edit_original_response(embed=embed, view=self)
