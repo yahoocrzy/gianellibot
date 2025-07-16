@@ -22,12 +22,12 @@ class WorkspaceManagement(commands.Cog):
         workspaces = await ClickUpWorkspaceRepository.get_all_workspaces(interaction.guild_id)
         
         if workspaces:
-            # Already configured - show status
+            # Already configured - offer options
             default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
             
-            embed = EmbedFactory.create_success_embed(
-                "✅ ClickUp Already Configured",
-                f"ClickUp is ready to use on this server!"
+            embed = EmbedFactory.create_info_embed(
+                "🔧 ClickUp Setup Options",
+                f"ClickUp is already configured with {len(workspaces)} workspace(s)."
             )
             
             embed.add_field(
@@ -39,15 +39,45 @@ class WorkspaceManagement(commands.Cog):
             )
             
             embed.add_field(
-                name="Available Commands",
-                value="• `/task-create` - Create new tasks\n"
-                      "• `/task-list` - View and manage tasks\n"
-                      "• `/calendar` - View tasks in calendar\n"
-                      "• `/workspace-list` - Manage workspaces",
+                name="What would you like to do?",
+                value="Choose an option below:",
                 inline=False
             )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            class SetupOptionsView(discord.ui.View):
+                def __init__(self, parent_cog):
+                    super().__init__(timeout=60)
+                    self.parent_cog = parent_cog
+                
+                @discord.ui.button(label="Add Another Workspace", style=discord.ButtonStyle.primary, emoji="➕")
+                async def add_workspace(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                    self.stop()
+                    # Use the parent cog's method to show token modal
+                    await self.parent_cog._show_token_modal(button_interaction)
+                
+                @discord.ui.button(label="View Current Status", style=discord.ButtonStyle.secondary, emoji="📊")
+                async def view_status(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                    self.stop()
+                    status_embed = EmbedFactory.create_success_embed(
+                        "✅ ClickUp Status",
+                        f"ClickUp is working perfectly!"
+                    )
+                    
+                    status_embed.add_field(
+                        name="Available Commands",
+                        value="• `/task-create` - Create new tasks\n"
+                              "• `/task-list` - View and manage tasks\n"
+                              "• `/calendar` - View tasks in calendar\n"
+                              "• `/workspace-list` - Manage workspaces\n"
+                              "• `/upcoming` - See upcoming tasks\n"
+                              "• `/today` - View today's tasks",
+                        inline=False
+                    )
+                    
+                    await button_interaction.response.edit_message(embed=status_embed, view=None)
+            
+            setup_view = SetupOptionsView(self)
+            await interaction.response.send_message(embed=embed, view=setup_view, ephemeral=True)
             return
         
         # Not configured - do the actual setup
