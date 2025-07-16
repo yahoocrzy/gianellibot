@@ -71,6 +71,21 @@ class UserPreference(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class ClickUpOAuthState(Base):
+    __tablename__ = "clickup_oauth_states"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    state: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # OAuth states expire after 10 minutes
+    
+    __table_args__ = (
+        Index("idx_oauth_state", "state"),
+        Index("idx_oauth_expires", "expires_at"),
+    )
+
 class ClickUpWorkspace(Base):
     __tablename__ = "clickup_workspaces"
     
@@ -78,10 +93,12 @@ class ClickUpWorkspace(Base):
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
     workspace_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)  # OAuth2 access token
+    token_type: Mapped[str] = mapped_column(String(50), default="Bearer")  # OAuth2 token type
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     added_by_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    authorized_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # When OAuth was authorized
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
