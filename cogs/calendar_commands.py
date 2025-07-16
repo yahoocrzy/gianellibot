@@ -320,8 +320,10 @@ class CalendarCommands(commands.Cog):
             class DateSelectView(discord.ui.View):
                 def __init__(self):
                     super().__init__(timeout=180)
-                    self.month = None
-                    self.year = None
+                    # Initialize with current month/year so button is enabled by default
+                    current_date = datetime.now()
+                    self.month = current_date.month
+                    self.year = current_date.year
                     
                     # Month dropdown
                     months = [
@@ -371,12 +373,12 @@ class CalendarCommands(commands.Cog):
                     year_select.callback = self.year_callback
                     self.add_item(year_select)
                     
-                    # Continue button
+                    # Continue button (enabled by default since we have defaults)
                     continue_btn = discord.ui.Button(
                         label="View Calendar",
                         style=discord.ButtonStyle.success,
                         row=2,
-                        disabled=True
+                        disabled=False
                     )
                     continue_btn.callback = self.continue_callback
                     self.add_item(continue_btn)
@@ -391,8 +393,7 @@ class CalendarCommands(commands.Cog):
                     await self.check_complete(interaction)
                 
                 async def check_complete(self, interaction: discord.Interaction):
-                    if self.month and self.year:
-                        self.continue_button.disabled = False
+                    # Button is always enabled since we have defaults
                     await interaction.response.edit_message(view=self)
                 
                 async def continue_callback(self, interaction: discord.Interaction):
@@ -434,24 +435,58 @@ class CalendarCommands(commands.Cog):
                 workspace_id = default_workspace.workspace_id
                 
                 try:
+                    # Calculate month date range for filtering
+                    start_of_month = datetime(target_year, target_month, 1)
+                    if target_month == 12:
+                        end_of_month = datetime(target_year + 1, 1, 1) - timedelta(days=1)
+                    else:
+                        end_of_month = datetime(target_year, target_month + 1, 1) - timedelta(days=1)
+                    
+                    # Convert to Unix timestamps (milliseconds) for comparison
+                    date_after = int(start_of_month.timestamp() * 1000)
+                    date_before = int(end_of_month.timestamp() * 1000)
+                    
+                    # Get spaces and only process ones we have access to
                     spaces = await api.get_spaces(workspace_id)
-                    for space in spaces[:3]:  # Limit spaces to prevent timeout
+                    spaces_checked = 0
+                    
+                    for space in spaces:
+                        if spaces_checked >= 1:  # Only check 1 accessible space
+                            break
+                            
                         try:
                             lists = await api.get_lists(space['id'])
-                            for lst in lists[:5]:  # Limit lists per space
+                            lists_checked = 0
+                            
+                            for lst in lists:
+                                if lists_checked >= 2:  # Only check 2 accessible lists
+                                    break
+                                    
                                 try:
                                     tasks = await api.get_tasks(lst['id'])
-                                    all_tasks.extend(tasks)
+                                    # Filter tasks with due dates in target month
+                                    for task in tasks:
+                                        if task.get('due_date'):
+                                            due_timestamp = int(task['due_date'])
+                                            if date_after <= due_timestamp <= date_before:
+                                                all_tasks.append(task)
+                                    lists_checked += 1
                                 except Exception as e:
                                     logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
                                     continue
+                            
+                            # If we successfully processed this space, count it
+                            if lists_checked > 0:
+                                spaces_checked += 1
+                                
                         except Exception as e:
                             logger.warning(f"Failed to get lists from space {space['name']}: {e}")
                             continue
+                            
                 except Exception as e:
                     logger.warning(f"Failed to get spaces from workspace {workspace_id}: {e}")
                 
-                # Organize all tasks by date
+                # Organize filtered tasks by date
                 tasks_by_date = {}
                 for task in all_tasks:
                     if task.get('due_date'):
@@ -568,24 +603,55 @@ class CalendarCommands(commands.Cog):
                 workspace_id = default_workspace.workspace_id
                 
                 try:
+                    # Calculate date range for upcoming tasks
+                    now = datetime.now()
+                    end_date = now + timedelta(days=days)
+                    
+                    # Convert to Unix timestamps (milliseconds) for comparison
+                    date_after = int(now.timestamp() * 1000)
+                    date_before = int(end_date.timestamp() * 1000)
+                    
+                    # Get spaces and only process ones we have access to
                     spaces = await api.get_spaces(workspace_id)
-                    for space in spaces[:3]:  # Limit spaces to prevent timeout
+                    spaces_checked = 0
+                    
+                    for space in spaces:
+                        if spaces_checked >= 1:  # Only check 1 accessible space
+                            break
+                            
                         try:
                             lists = await api.get_lists(space['id'])
-                            for lst in lists[:5]:  # Limit lists per space
+                            lists_checked = 0
+                            
+                            for lst in lists:
+                                if lists_checked >= 2:  # Only check 2 accessible lists
+                                    break
+                                    
                                 try:
                                     tasks = await api.get_tasks(lst['id'])
-                                    all_tasks.extend(tasks)
+                                    # Filter tasks with due dates in upcoming range
+                                    for task in tasks:
+                                        if task.get('due_date'):
+                                            due_timestamp = int(task['due_date'])
+                                            if due_timestamp >= date_after:  # Include overdue
+                                                all_tasks.append(task)
+                                    lists_checked += 1
                                 except Exception as e:
                                     logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
                                     continue
+                            
+                            # If we successfully processed this space, count it
+                            if lists_checked > 0:
+                                spaces_checked += 1
+                                
                         except Exception as e:
                             logger.warning(f"Failed to get lists from space {space['name']}: {e}")
                             continue
+                            
                 except Exception as e:
                     logger.warning(f"Failed to get spaces from workspace {workspace_id}: {e}")
                 
-                # Filter for upcoming tasks
+                # Organize filtered tasks into upcoming and overdue
                 now = datetime.now()
                 end_date = now + timedelta(days=days)
                 
