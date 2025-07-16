@@ -24,16 +24,15 @@ class AICommandsEnhanced(commands.Cog):
     
     async def get_claude_api(self, guild_id: int) -> Optional[ClaudeAPI]:
         """Get Claude API instance"""
-        config = await ClaudeConfigRepository.get_config(guild_id)
-        if config and config.is_enabled:
-            api_key = await ClaudeConfigRepository.get_decrypted_api_key(config)
-            return ClaudeAPI(
-                api_key=api_key,
-                model=config.model,
-                max_tokens=config.max_tokens,
-                temperature=config.temperature
-            )
-        return None
+        try:
+            config = await ClaudeConfigRepository.get_config(guild_id)
+            if config and config.is_enabled:
+                api_key = await ClaudeConfigRepository.get_decrypted_api_key(config)
+                return ClaudeAPI(api_key)
+            return None
+        except Exception as e:
+            logger.error(f"Error getting Claude API: {e}")
+            return None
     
     @app_commands.command(name="ai-create-task", description="Create a task using natural language")
     @app_commands.describe(
@@ -102,7 +101,12 @@ class AICommandsEnhanced(commands.Cog):
                     "assignee": "assignee name or null"
                 }}"""
                 
-                response = await claude_api.create_message(prompt, max_tokens=500)
+                # Get config for Claude parameters
+                config = await ClaudeConfigRepository.get_config(interaction.guild_id)
+                max_tokens = config.max_tokens if config else 500
+                model = config.model if config else "claude-3-sonnet-20240229"
+                
+                response = await claude_api.create_message(prompt, max_tokens=max_tokens, model=model)
                 
                 # Parse the response
                 import json
@@ -255,8 +259,12 @@ class AICommandsEnhanced(commands.Cog):
                 
                 prompt = f"{prompts.get(analysis_type, prompts['optimization'])}\n\nTasks:\n{json.dumps(task_summary, indent=2)}"
                 
-                # Get AI analysis
-                analysis = await claude_api.create_message(prompt, max_tokens=1500)
+                # Get AI analysis with config parameters
+                config = await ClaudeConfigRepository.get_config(interaction.guild_id)
+                max_tokens = min(config.max_tokens, 1500) if config else 1500
+                model = config.model if config else "claude-3-sonnet-20240229"
+                
+                analysis = await claude_api.create_message(prompt, max_tokens=max_tokens, model=model)
                 
                 # Create result embed
                 # Get display name for analysis type

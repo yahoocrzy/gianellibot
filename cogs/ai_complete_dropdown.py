@@ -229,10 +229,7 @@ class AICompleteDropdown(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         
-        # Get APIs
-        token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
-        clickup_api = ClickUpAPI(token)
-        
+        # Get Claude API
         api_key = await ClaudeConfigRepository.get_decrypted_api_key(config)
         claude_api = ClaudeAPI(api_key)
         
@@ -443,18 +440,26 @@ class AICompleteDropdown(commands.Cog):
         await interaction.edit_original_response(embed=embed, view=None)
         
         # Get all tasks
-        workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
-        all_tasks = []
-        
-        spaces = await clickup_api.get_spaces(workspace.workspace_id)
-        for space in spaces[:2]:
-            lists = await clickup_api.get_lists(space['id'])
-            for lst in lists[:5]:
-                tasks = await clickup_api.get_tasks(lst['id'])
-                all_tasks.extend(tasks)
-        
-        # Generate report with AI
-        prompt = f"""Generate a status report for these tasks:
+        try:
+            workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            if not workspace:
+                embed = EmbedFactory.create_error_embed(
+                    "No Workspace",
+                    "No default workspace found. Please configure a workspace first."
+                )
+                await interaction.edit_original_response(embed=embed)
+                return
+                
+            all_tasks = []
+            spaces = await clickup_api.get_spaces(workspace.workspace_id)
+            for space in spaces[:2]:
+                lists = await clickup_api.get_lists(space['id'])
+                for lst in lists[:5]:
+                    tasks = await clickup_api.get_tasks(lst['id'])
+                    all_tasks.extend(tasks)
+            
+            # Generate report with AI
+            prompt = f"""Generate a status report for these tasks:
 {json.dumps([{
     'name': t['name'],
     'status': t.get('status', {}).get('status'),
@@ -467,14 +472,22 @@ Include:
 3. Key insights
 4. Recommendations"""
 
-        report = await claude_api.create_message(prompt, max_tokens=1000)
-        
-        embed = EmbedFactory.create_info_embed(
-            "📊 Status Report",
-            report[:2000]
-        )
-        
-        await interaction.edit_original_response(embed=embed)
+            report = await claude_api.create_message(prompt, max_tokens=1000)
+            
+            embed = EmbedFactory.create_info_embed(
+                "📊 Status Report",
+                report[:2000] if report else "Unable to generate report"
+            )
+            
+            await interaction.edit_original_response(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error generating status report: {e}")
+            embed = EmbedFactory.create_error_embed(
+                "Report Failed",
+                f"Failed to generate status report: {str(e)}"
+            )
+            await interaction.edit_original_response(embed=embed)
     
     async def _handle_due_dates(
         self,

@@ -41,7 +41,8 @@ class WorkspaceManagement(commands.Cog):
                 try:
                     # Test the token and get workspace info
                     api = ClickUpAPI(token)
-                    workspaces = await api.get_workspaces()
+                    async with api:
+                        workspaces = await api.get_workspaces()
                     
                     if not workspaces:
                         embed = EmbedFactory.create_error_embed(

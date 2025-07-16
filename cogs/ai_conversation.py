@@ -47,10 +47,18 @@ class AIConversation(commands.Cog):
         if interaction.guild_id not in self.active_conversations:
             self.active_conversations[interaction.guild_id] = {}
         
+        # Get workspace information
+        try:
+            workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            workspace_id = workspace.workspace_id if workspace else None
+        except Exception as e:
+            logger.error(f"Error getting workspace: {e}")
+            workspace_id = None
+        
         self.active_conversations[interaction.guild_id][interaction.user.id] = {
             'started_at': datetime.now(),
             'context': [],
-            'workspace_id': workspace.workspace_id
+            'workspace_id': workspace_id
         }
         
         embed = EmbedFactory.create_info_embed(

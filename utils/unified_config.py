@@ -24,10 +24,11 @@ class UnifiedConfigManager:
                 try:
                     token = await ClickUpWorkspaceRepository.get_decrypted_token(workspace)
                     api = ClickUpAPI(token)
-                    # Test the API quickly
-                    await api.get_workspaces()
-                    logger.info(f"Using new workspace system for guild {guild_id}")
-                    return api
+                    # Test the API quickly with proper session management
+                    async with api:
+                        await api.get_workspaces()
+                    # Return a new instance since we closed the test one
+                    return ClickUpAPI(token)
                 except Exception as e:
                     logger.warning(f"New system failed for guild {guild_id}: {e}")
             
@@ -40,10 +41,12 @@ class UnifiedConfigManager:
                     from services.security import decrypt_token
                     token = await decrypt_token(config['clickup_token_encrypted'])
                     api = ClickUpAPI(token)
-                    # Test the API quickly
-                    await api.get_workspaces()
+                    # Test the API quickly with proper session management
+                    async with api:
+                        await api.get_workspaces()
+                    # Return a new instance since we closed the test one
                     logger.info(f"Using legacy system for guild {guild_id}")
-                    return api
+                    return ClickUpAPI(token)
                 except Exception as e:
                     logger.warning(f"Legacy system failed for guild {guild_id}: {e}")
                     logger.debug(f"Legacy system token: {config['clickup_token_encrypted'][:20]}... (truncated)")

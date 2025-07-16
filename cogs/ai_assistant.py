@@ -199,7 +199,7 @@ Category: {category_view.selected_category}
 
 Respond with only valid JSON."""
 
-            response = await claude_api.send_message(prompt)
+            response = await claude_api.create_message(prompt)
             
             try:
                 task_data = json.loads(response)
@@ -373,7 +373,7 @@ Provide:
 
 Keep it concise and actionable. Max 300 words."""
             
-            ai_response = await claude_api.send_message(prompt)
+            ai_response = await claude_api.create_message(prompt)
             
             embed = EmbedFactory.create_info_embed(
                 "🤖 AI Status Report",
@@ -490,7 +490,7 @@ Focus on:
 
 Keep each suggestion to 1-2 sentences."""
             
-            suggestions = await claude_api.send_message(prompt)
+            suggestions = await claude_api.create_message(prompt)
             
             embed = EmbedFactory.create_info_embed(
                 "💡 AI Workflow Suggestions",
