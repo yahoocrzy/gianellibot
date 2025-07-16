@@ -28,6 +28,7 @@ class ClickUpOAuth:
         params = {
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
+            "response_type": "code",
             "state": state
         }
         
@@ -68,12 +69,35 @@ class ClickUpOAuth:
             }
             
             async with aiohttp.ClientSession() as session:
+                # Try the standard teams endpoint first
                 async with session.get(f"{self.api_base}/team", headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
                         workspaces = data.get("teams", [])
                         logger.info(f"Retrieved {len(workspaces)} authorized workspaces")
                         return workspaces
+                    elif response.status == 401:
+                        # Token might be invalid, try to get user info first to validate token
+                        logger.warning("Token rejected for teams endpoint, checking token validity")
+                        async with session.get(f"{self.api_base}/user", headers=headers) as user_response:
+                            if user_response.status == 200:
+                                user_data = await user_response.json()
+                                logger.info(f"Token is valid for user: {user_data.get('user', {}).get('username', 'unknown')}")
+                                # Try teams endpoint again
+                                async with session.get(f"{self.api_base}/team", headers=headers) as retry_response:
+                                    if retry_response.status == 200:
+                                        retry_data = await retry_response.json()
+                                        workspaces = retry_data.get("teams", [])
+                                        logger.info(f"Retrieved {len(workspaces)} authorized workspaces on retry")
+                                        return workspaces
+                                    else:
+                                        retry_error = await retry_response.text()
+                                        logger.error(f"Teams endpoint failed on retry: {retry_response.status} - {retry_error}")
+                                        return None
+                            else:
+                                user_error = await user_response.text()
+                                logger.error(f"Token validation failed: {user_response.status} - {user_error}")
+                                return None
                     else:
                         error_text = await response.text()
                         logger.error(f"Failed to get workspaces: {response.status} - {error_text}")
