@@ -108,7 +108,7 @@ class SpaceSelectView(ClickUpSelectionView):
             logger.error(f"Failed to load spaces: {e}")
             error_msg = "Failed to load spaces. Please check your ClickUp configuration and try again."
             if "RetryError" in str(e) or "RuntimeError" in str(e):
-                error_msg += "\n\n💡 **Tip:** This might be a network issue. Try running `/clickup-setup` again to refresh your connection."
+                error_msg += "\n\n💡 **Tip:** This might be a network issue. Try running `/workspace-add` again to refresh your connection."
             await interaction.followup.send(error_msg, ephemeral=True)
     
     async def space_callback(self, interaction: discord.Interaction):

@@ -92,7 +92,7 @@ class HelpCommand(commands.Cog):
             name="🎯 Other Features",
             value="• `/reaction-roles-setup` - Auto role assignment\n"
                   "• `/purge` - Advanced message cleanup\n"
-                  "• `/clickup-setup` - Legacy setup (use workspace-add instead)",
+                  "• `/config-status` - Check configuration health",
             inline=False
         )
         

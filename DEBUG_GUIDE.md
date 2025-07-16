@@ -77,7 +77,7 @@ Once the bot is running, use these slash commands:
 ### ClickUp Integration Issues
 
 1. **No Configuration**
-   - Use `/clickup-setup` or `/workspace-add`
+   - Use `/workspace-add`
    - Check with `/debug-config`
 
 2. **API Errors**

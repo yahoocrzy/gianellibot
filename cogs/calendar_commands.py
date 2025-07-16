@@ -690,7 +690,7 @@ class CalendarCommands(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured", 
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -702,7 +702,7 @@ class CalendarCommands(commands.Cog):
             if not workspaces:
                 embed = EmbedFactory.create_error_embed(
                     "No Workspaces",
-                    "No workspaces configured. Use `/clickup-setup` OR `/workspace-add` first."
+                    "No workspaces configured. Use `/workspace-add` first."
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return

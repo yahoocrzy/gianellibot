@@ -4,7 +4,6 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime
 from services.clickup_api import ClickUpAPI
-from repositories.server_config import ServerConfigRepository
 from repositories.clickup_workspaces import ClickUpWorkspaceRepository
 from utils.embed_factory import EmbedFactory
 from utils.enhanced_selections import (
@@ -35,7 +34,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -306,7 +305,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -609,7 +608,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -803,7 +802,7 @@ class ClickUpTasksEnhanced(commands.Cog):
         if not api:
             embed = EmbedFactory.create_error_embed(
                 "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` OR `/workspace-add` first."
+                "ClickUp hasn't been set up yet. Use `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
