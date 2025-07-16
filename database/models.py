@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Integer, Boolean, DateTime, Text, JSON, BigInteger
+from sqlalchemy import String, Integer, Boolean, DateTime, Text, JSON, BigInteger, Index
 from datetime import datetime
 import os
 from loguru import logger
