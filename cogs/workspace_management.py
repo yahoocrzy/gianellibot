@@ -229,7 +229,7 @@ class WorkspaceManagement(commands.Cog):
         if not workspaces:
             embed = EmbedFactory.create_error_embed(
                 "No Workspaces",
-                "No workspaces configured. Use `/clickup-setup` OR `/workspace-add` first."
+                "No workspaces configured. Use `/clickup-setup` or `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -440,7 +440,7 @@ class WorkspaceManagement(commands.Cog):
         if not workspaces:
             embed = EmbedFactory.create_error_embed(
                 "No Workspaces",
-                "No workspaces configured. Use `/clickup-setup` OR `/workspace-add` first."
+                "No workspaces configured. Use `/clickup-setup` or `/workspace-add` first."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return

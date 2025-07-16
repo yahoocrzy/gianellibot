@@ -298,7 +298,7 @@ class CalendarCommands(commands.Cog):
             embed.add_field(
                 name="Quick Setup",
                 value="1. Get your ClickUp API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
-                      "2. Run `/clickup-setup` OR `/workspace-add` and paste your token\n"
+                      "2. Run `/clickup-setup` or `/workspace-add` and paste your token\n"
                       "3. Calendar will work immediately after setup!",
                 inline=False
             )
@@ -481,7 +481,7 @@ class CalendarCommands(commands.Cog):
             embed.add_field(
                 name="Quick Setup",
                 value="1. Get your ClickUp API token from [ClickUp Settings](https://app.clickup.com/settings/apps)\n"
-                      "2. Run `/clickup-setup` OR `/workspace-add` and paste your token\n"
+                      "2. Run `/clickup-setup` or `/workspace-add` and paste your token\n"
                       "3. Calendar will work immediately after setup!",
                 inline=False
             )
