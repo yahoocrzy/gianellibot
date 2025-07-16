@@ -12,6 +12,7 @@ from utils.debug_logger import debug_logger
 import signal
 import sys
 from datetime import datetime
+import aiohttp
 
 # Load environment variables
 load_dotenv()
@@ -35,6 +36,7 @@ class ClickUpBot(commands.Bot):
         
         self.db = None
         self.web_server = None
+        self.keep_alive_task = None
         
     async def setup_hook(self):
         """Initialize bot components"""
@@ -86,6 +88,10 @@ class ClickUpBot(commands.Bot):
                 self.web_server = create_web_server(self)
                 asyncio.create_task(self.web_server.serve())
                 debug_logger.log_event("web_server", {"status": "started", "port": os.getenv('PORT', 10000)})
+                
+                # Start keep-alive task to prevent Render shutdown
+                self.keep_alive_task = asyncio.create_task(self.keep_alive_loop())
+                debug_logger.log_event("keep_alive", {"status": "started"})
             except Exception as e:
                 debug_logger.log_error(e, {"phase": "web_server_start"})
                 logger.error(f"Failed to start web server: {e}")
@@ -116,6 +122,16 @@ class ClickUpBot(commands.Bot):
             )
         )
         
+    async def on_disconnect(self):
+        """Handle bot disconnection"""
+        logger.warning("Bot disconnected from Discord")
+        debug_logger.log_event("bot_disconnect", {"timestamp": datetime.utcnow().isoformat()})
+    
+    async def on_resumed(self):
+        """Handle bot reconnection"""
+        logger.info("Bot resumed connection to Discord")
+        debug_logger.log_event("bot_resumed", {"timestamp": datetime.utcnow().isoformat()})
+    
     async def on_command_error(self, ctx: commands.Context, error: Exception):
         """Global error handler for commands"""
         debug_logger.log_command(ctx, error)
@@ -135,8 +151,42 @@ class ClickUpBot(commands.Bot):
         logger.error(f"Unhandled command error: {error}")
         await ctx.send("An error occurred while processing your command.")
     
+    async def keep_alive_loop(self):
+        """Keep the service alive by pinging itself every 10 minutes"""
+        await self.wait_until_ready()
+        
+        # Get the service URL from environment or construct it
+        service_url = os.getenv("RENDER_EXTERNAL_URL")
+        if not service_url:
+            # Fallback to constructing URL from service name
+            service_name = os.getenv("RENDER_SERVICE_NAME", "gianellibot-1")
+            service_url = f"https://{service_name}.onrender.com"
+        
+        logger.info(f"Starting keep-alive loop, pinging: {service_url}")
+        
+        while not self.is_closed():
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{service_url}/health", timeout=30) as response:
+                        if response.status == 200:
+                            logger.debug("Keep-alive ping successful")
+                        else:
+                            logger.warning(f"Keep-alive ping returned status {response.status}")
+            except Exception as e:
+                logger.warning(f"Keep-alive ping failed: {e}")
+            
+            # Wait 10 minutes before next ping (Render shuts down after 15 minutes of inactivity)
+            await asyncio.sleep(600)  # 10 minutes
+    
     async def close(self):
         """Cleanup on shutdown"""
+        if self.keep_alive_task:
+            self.keep_alive_task.cancel()
+            try:
+                await self.keep_alive_task
+            except asyncio.CancelledError:
+                pass
+        
         if self.web_server:
             await self.web_server.shutdown()
         await super().close()
@@ -155,8 +205,27 @@ async def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    async with bot:
-        await bot.start(os.getenv("DISCORD_TOKEN"))
+    # Run bot with auto-restart on connection errors
+    max_retries = 5
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            async with bot:
+                await bot.start(os.getenv("DISCORD_TOKEN"))
+        except (discord.ConnectionClosed, discord.GatewayNotFound, discord.HTTPException) as e:
+            retry_count += 1
+            logger.error(f"Connection error (attempt {retry_count}/{max_retries}): {e}")
+            if retry_count < max_retries:
+                wait_time = min(300, 60 * retry_count)  # Exponential backoff, max 5 minutes
+                logger.info(f"Retrying in {wait_time} seconds...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.critical("Max retries exceeded, shutting down")
+                break
+        except Exception as e:
+            logger.critical(f"Unexpected error: {e}")
+            break
 
 if __name__ == "__main__":
     asyncio.run(main())

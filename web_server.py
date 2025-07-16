@@ -21,7 +21,7 @@ def create_web_server(bot):
     
     @app.get("/health")
     async def health_check():
-        """Health check endpoint for Render"""
+        """Health check endpoint for Render and keep-alive"""
         try:
             # Check bot connection
             if not bot.is_ready():
@@ -33,12 +33,19 @@ def create_web_server(bot):
             # Check database connection (simplified)
             # Database check removed for now to avoid connection issues
             
+            uptime = "unknown"
+            if hasattr(bot, 'start_time'):
+                uptime_delta = datetime.utcnow() - bot.start_time
+                uptime = str(uptime_delta)
+            
             return {
                 "status": "healthy",
                 "bot_latency": f"{bot.latency * 1000:.2f}ms",
                 "guilds": len(bot.guilds),
                 "users": len(bot.users),
-                "timestamp": datetime.utcnow().isoformat()
+                "uptime": uptime,
+                "timestamp": datetime.utcnow().isoformat(),
+                "keep_alive": True
             }
         except Exception as e:
             logger.error(f"Health check failed: {e}")
@@ -46,6 +53,25 @@ def create_web_server(bot):
                 status_code=503,
                 content={"status": "unhealthy", "error": str(e)}
             )
+    
+    @app.get("/ping")
+    async def ping():
+        """Simple ping endpoint for keep-alive"""
+        return {"pong": True, "timestamp": datetime.utcnow().isoformat()}
+    
+    @app.get("/uptime")
+    async def uptime():
+        """Uptime information"""
+        if not hasattr(bot, 'start_time'):
+            return {"uptime": "unknown"}
+        
+        uptime_delta = datetime.utcnow() - bot.start_time
+        return {
+            "uptime_seconds": int(uptime_delta.total_seconds()),
+            "uptime_human": str(uptime_delta),
+            "started_at": bot.start_time.isoformat(),
+            "current_time": datetime.utcnow().isoformat()
+        }
     
     @app.get("/stats")
     async def stats():
