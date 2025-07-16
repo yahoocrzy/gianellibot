@@ -19,22 +19,19 @@ class ListSelectView(discord.ui.View):
     async def start(self, interaction: discord.Interaction):
         """Start the selection process"""
         try:
-            # Get workspaces
-            workspaces = await self.api.get_workspaces()
-            if not workspaces:
+            # Use the default workspace instead of checking all API workspaces
+            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            if not default_workspace:
                 embed = EmbedFactory.create_error_embed(
-                    "No Workspaces",
-                    "No workspaces found. Please check your ClickUp configuration."
+                    "No Default Workspace",
+                    "No default workspace set. Run `/clickup-setup` first."
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
             
-            # If only one workspace, skip selection
-            if len(workspaces) == 1:
-                self.current_workspace = workspaces[0]
-                await self.show_spaces(interaction)
-            else:
-                await self.show_workspaces(interaction, workspaces)
+            # Use the configured default workspace directly
+            self.current_workspace = {'id': default_workspace.workspace_id, 'name': default_workspace.workspace_name}
+            await self.show_spaces(interaction)
                 
         except Exception as e:
             logger.error(f"Error in list selection: {e}")

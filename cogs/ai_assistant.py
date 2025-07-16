@@ -213,14 +213,14 @@ Respond with only valid JSON."""
                 }
             
             # Now select list and create the task
-            # Get workspace and lists
-            workspaces = await clickup_api.get_workspaces()
-            if not workspaces:
-                embed = EmbedFactory.create_error_embed("No Workspaces", "No workspaces found.")
+            # Get the default workspace
+            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            if not default_workspace:
+                embed = EmbedFactory.create_error_embed("No Default Workspace", "No default workspace set. Run `/clickup-setup` first.")
                 await interaction.edit_original_response(embed=embed)
                 return
             
-            workspace_id = workspaces[0]['id']
+            workspace_id = default_workspace.workspace_id
             spaces = await clickup_api.get_spaces(workspace_id)
             
             all_lists = []
@@ -325,33 +325,31 @@ Respond with only valid JSON."""
         await interaction.edit_original_response(embed=embed, view=None)
         
         try:
-            # Get tasks from ALL workspaces (same as calendar)
-            workspaces = await clickup_api.get_workspaces()
-            if not workspaces:
-                embed = EmbedFactory.create_error_embed("No Data", "No workspaces found.")
+            # Get tasks from the default workspace only
+            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            if not default_workspace:
+                embed = EmbedFactory.create_error_embed("No Default Workspace", "No default workspace set. Run `/clickup-setup` first.")
                 await interaction.edit_original_response(embed=embed)
                 return
             
             all_tasks = []
-            for workspace in workspaces:
-                try:
-                    spaces = await clickup_api.get_spaces(workspace['id'])
-                    for space in spaces[:2]:  # Limit spaces to prevent timeout
-                        try:
-                            lists = await clickup_api.get_lists(space['id'])
-                            for lst in lists[:3]:  # Limit lists per space
-                                try:
-                                    tasks = await clickup_api.get_tasks(lst['id'])
-                                    all_tasks.extend(tasks[:10])  # Limit tasks per list
-                                except Exception as e:
-                                    logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
-                                    continue
-                        except Exception as e:
-                            logger.warning(f"Failed to get lists from space {space['name']}: {e}")
-                            continue
-                except Exception as e:
-                    logger.warning(f"Failed to get spaces from workspace {workspace['name']}: {e}")
-                    continue
+            try:
+                spaces = await clickup_api.get_spaces(default_workspace.workspace_id)
+                for space in spaces[:2]:  # Limit spaces to prevent timeout
+                    try:
+                        lists = await clickup_api.get_lists(space['id'])
+                        for lst in lists[:3]:  # Limit lists per space
+                            try:
+                                tasks = await clickup_api.get_tasks(lst['id'])
+                                all_tasks.extend(tasks[:10])  # Limit tasks per list
+                            except Exception as e:
+                                logger.warning(f"Failed to get tasks from list {lst['name']}: {e}")
+                                continue
+                    except Exception as e:
+                        logger.warning(f"Failed to get lists from space {space['name']}: {e}")
+                        continue
+            except Exception as e:
+                logger.warning(f"Failed to get spaces from workspace {default_workspace.workspace_id}: {e}")
             
             # Prepare task summary for AI
             task_summary = []
@@ -476,11 +474,11 @@ Keep it concise and actionable. Max 300 words."""
         await interaction.edit_original_response(embed=embed, view=None)
         
         try:
-            # Basic workflow analysis
-            workspaces = await clickup_api.get_workspaces()
-            workspace_count = len(workspaces) if workspaces else 0
+            # Basic workflow analysis using default workspace
+            default_workspace = await ClickUpWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            workspace_info = f"workspace '{default_workspace.workspace_name}'" if default_workspace else "no configured workspace"
             
-            prompt = f"""Provide 3-4 brief workflow improvement suggestions for a team using ClickUp with {workspace_count} workspace(s).
+            prompt = f"""Provide 3-4 brief workflow improvement suggestions for a team using ClickUp with {workspace_info}.
 
 Focus on:
 - Task organization
