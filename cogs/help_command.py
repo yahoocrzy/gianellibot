@@ -37,9 +37,10 @@ class HelpCommand(commands.Cog):
         if not workspaces:
             embed.add_field(
                 name="🚀 Getting Started",
-                value="1. Use `/clickup-setup` to add your ClickUp workspace\n"
-                      "2. Use `/task-create` to create your first task\n"
-                      "3. Use `/calendar` to view tasks in a calendar",
+                value="1. Use `/clickup-setup` to login with ClickUp\n"
+                      "2. Use `/workspace-add-token` for full access\n"
+                      "3. Use `/task-create` to create your first task\n"
+                      "4. Use `/calendar` to view tasks in a calendar",
                 inline=False
             )
         
@@ -64,11 +65,11 @@ class HelpCommand(commands.Cog):
         # Workspace commands
         embed.add_field(
             name="🏢 Workspace Management",
-            value="• `/clickup-setup` - Complete ClickUp setup\n"
-                  "• `/workspace-add` - Add additional workspaces\n"
+            value="• `/clickup-setup` - OAuth2 ClickUp setup\n"
+                  "• `/workspace-add` - Add workspaces\n"
+                  "• `/workspace-add-token` - Add personal token\n"
                   "• `/workspace-list` - View workspaces\n"
-                  "• `/workspace-switch` - Change default\n"
-                  "• `/workspace-remove` - Remove workspace",
+                  "• `/workspace-switch` - Change default",
             inline=True
         )
         
@@ -102,7 +103,7 @@ class HelpCommand(commands.Cog):
             "💡 **No more typing IDs!** All commands use interactive dropdowns",
             "🔄 **Multiple workspaces** supported - switch between them easily",
             "📱 **Mobile friendly** - All features work on Discord mobile",
-            "🔒 **Secure** - All tokens are encrypted before storage"
+            "🔑 **Full access** - Add personal API token for space/task operations"
         ]
         
         embed.add_field(
@@ -146,10 +147,10 @@ class HelpCommand(commands.Cog):
         embed.add_field(
             name="Technology",
             value="• Built with discord.py\n"
-                  "• ClickUp API v2\n"
+                  "• ClickUp API v2 + OAuth2\n"
                   "• Claude AI integration\n"
                   "• PostgreSQL database\n"
-                  "• Encrypted token storage",
+                  "• Hybrid token system",
             inline=True
         )
         
