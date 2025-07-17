@@ -17,7 +17,8 @@
       "Bash(find:*)",
       "Bash(mv:*)",
       "Bash(grep:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "WebFetch(domain:help.clickup.com)"
     ],
     "deny": []
   }

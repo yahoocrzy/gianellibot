@@ -22,14 +22,14 @@ class ClickUpTasksEnhanced(commands.Cog):
         self.cache_ttl = 300  # 5 minutes
     
     async def get_api(self, guild_id: int) -> Optional[ClickUpAPI]:
-        """Get ClickUp API instance for the guild using OAuth2 workspace repository"""
+        """Get ClickUp API instance for the guild using best available token"""
         # Get default workspace
         default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
         if not default_workspace:
             return None
             
-        # Get OAuth2 access token
-        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
+        # Get best available token (personal API token preferred, OAuth2 fallback)
+        token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
         if not token:
             return None
             
@@ -41,10 +41,28 @@ class ClickUpTasksEnhanced(commands.Cog):
         # Check if configured
         api = await self.get_api(interaction.guild_id)
         if not api:
-            embed = EmbedFactory.create_error_embed(
-                "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` first."
-            )
+            # Check if we have OAuth but no personal token
+            default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
+            if default_workspace and not default_workspace.personal_api_token:
+                embed = EmbedFactory.create_warning_embed(
+                    "Personal API Token Needed",
+                    "OAuth2 is configured but personal API token is needed for task operations."
+                )
+                embed.add_field(
+                    name="Quick Fix",
+                    value="Use `/workspace-add-token` to add your personal API token for full functionality.",
+                    inline=False
+                )
+                embed.add_field(
+                    name="Why This is Needed",
+                    value="ClickUp's OAuth doesn't grant space/task access. Personal tokens provide full functionality.",
+                    inline=False
+                )
+            else:
+                embed = EmbedFactory.create_error_embed(
+                    "Not Configured",
+                    "ClickUp hasn't been set up yet. Use `/clickup-setup` first."
+                )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         

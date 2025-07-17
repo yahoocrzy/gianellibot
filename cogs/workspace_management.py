@@ -625,6 +625,147 @@ class WorkspaceManagement(commands.Cog):
             )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @app_commands.command(name="workspace-add-token", description="Add personal API token for full workspace access")
+    @app_commands.default_permissions(administrator=True)
+    async def workspace_add_token(self, interaction: discord.Interaction):
+        """Add personal API token to enable full workspace functionality"""
+        workspaces = await ClickUpOAuthWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+        
+        if not workspaces:
+            embed = EmbedFactory.create_error_embed(
+                "No Workspaces",
+                "No workspaces configured. Use `/clickup-setup` first."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        embed = EmbedFactory.create_info_embed(
+            "🔑 Add Personal API Token",
+            "Due to ClickUp's OAuth limitations, personal API tokens are needed for full access to spaces and tasks."
+        )
+        
+        embed.add_field(
+            name="Why Personal API Tokens?",
+            value="• OAuth2 works for workspace management\n"
+                  "• Personal tokens enable space/task operations\n"
+                  "• Provides full functionality until ClickUp improves OAuth\n"
+                  "• Optional - only needed for `/task-create`, `/calendar`, etc.",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="How to Get Your Token:",
+            value="1. Go to [ClickUp Settings > Apps](https://app.clickup.com/settings/apps)\n"
+                  "2. Scroll to **Personal API Token**\n"
+                  "3. Click **Generate** or **Copy** your token\n"
+                  "4. Select a workspace below and enter the token",
+            inline=False
+        )
+        
+        # Create workspace selection
+        class WorkspaceTokenView(discord.ui.View):
+            def __init__(self, parent_cog):
+                super().__init__(timeout=300)
+                self.parent_cog = parent_cog
+                self.selected_workspace = None
+                
+                options = []
+                for ws in workspaces:
+                    has_token = "✅" if ws.personal_api_token else "❌"
+                    options.append(
+                        discord.SelectOption(
+                            label=f"{ws.workspace_name}",
+                            value=str(ws.id),
+                            description=f"Personal token: {has_token} | ID: {ws.workspace_id}",
+                            emoji="🔑" if not ws.personal_api_token else "✅"
+                        )
+                    )
+                
+                select = discord.ui.Select(
+                    placeholder="Choose workspace to add token...",
+                    options=options
+                )
+                select.callback = self.select_callback
+                self.add_item(select)
+            
+            async def select_callback(self, select_interaction: discord.Interaction):
+                workspace_db_id = int(select_interaction.data['values'][0])
+                self.selected_workspace = next((ws for ws in workspaces if ws.id == workspace_db_id), None)
+                self.stop()
+                await select_interaction.response.defer_update()
+        
+        token_view = WorkspaceTokenView(self)
+        await interaction.response.send_message(embed=embed, view=token_view, ephemeral=True)
+        
+        await token_view.wait()
+        
+        if not token_view.selected_workspace:
+            return
+        
+        # Show token input modal
+        class TokenModal(discord.ui.Modal):
+            def __init__(self, workspace):
+                super().__init__(title=f"Add Token for {workspace.workspace_name}")
+                self.workspace = workspace
+                
+                self.token_input = discord.ui.TextInput(
+                    label="Personal API Token",
+                    placeholder="pk_123456789_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
+                    style=discord.TextStyle.short,
+                    max_length=100,
+                    required=True
+                )
+                self.add_item(self.token_input)
+            
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                token = self.token_input.value.strip()
+                
+                if not token.startswith('pk_'):
+                    embed = EmbedFactory.create_error_embed(
+                        "Invalid Token",
+                        "ClickUp personal API tokens start with 'pk_'. Please check your token."
+                    )
+                    await modal_interaction.response.send_message(embed=embed, ephemeral=True)
+                    return
+                
+                # Save the token
+                success = await ClickUpOAuthWorkspaceRepository.set_personal_api_token(
+                    self.workspace.id, token
+                )
+                
+                if success:
+                    embed = EmbedFactory.create_success_embed(
+                        "✅ Token Added Successfully",
+                        f"Personal API token added to **{self.workspace.workspace_name}**"
+                    )
+                    
+                    embed.add_field(
+                        name="What's Enabled Now",
+                        value="• Full access to spaces and tasks\n"
+                              "• `/task-create` will work properly\n"
+                              "• `/calendar` will show all tasks\n"
+                              "• All ClickUp commands fully functional",
+                        inline=False
+                    )
+                    
+                    embed.add_field(
+                        name="Test It Out",
+                        value="Try `/task-create` or `/calendar` now!",
+                        inline=False
+                    )
+                else:
+                    embed = EmbedFactory.create_error_embed(
+                        "Failed to Save Token",
+                        "Could not save the personal API token. Please try again."
+                    )
+                
+                await modal_interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        modal = TokenModal(token_view.selected_workspace)
+        await interaction.edit_original_response(embed=embed, view=None)
+        await interaction.followup.send("Opening token input form...", ephemeral=True)
+        await interaction.followup.send_modal(modal)
 
 async def setup(bot):
     await bot.add_cog(WorkspaceManagement(bot))

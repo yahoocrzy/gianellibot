@@ -95,6 +95,7 @@ class ClickUpWorkspace(Base):
     workspace_name: Mapped[str] = mapped_column(String(255), nullable=False)
     access_token: Mapped[str] = mapped_column(Text, nullable=False)  # OAuth2 access token
     token_type: Mapped[str] = mapped_column(String(50), default="Bearer")  # OAuth2 token type
+    personal_api_token: Mapped[str] = mapped_column(Text, nullable=True)  # Personal API token for full access
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     added_by_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)

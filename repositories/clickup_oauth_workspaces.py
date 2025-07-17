@@ -281,3 +281,49 @@ class ClickUpOAuthWorkspaceRepository:
         except Exception as e:
             logger.error(f"Error getting access token: {e}")
             return None
+    
+    @staticmethod
+    async def get_best_token(workspace: ClickUpWorkspace) -> Optional[str]:
+        """Get the best available token: personal API token if available, otherwise OAuth2 token"""
+        try:
+            # Try personal API token first (full access)
+            if workspace and workspace.personal_api_token:
+                logger.info(f"Using personal API token for workspace {workspace.workspace_name}")
+                return workspace.personal_api_token
+            
+            # Fall back to OAuth2 token
+            if workspace and workspace.access_token:
+                is_valid = await clickup_oauth.test_token(workspace.access_token)
+                if is_valid:
+                    logger.info(f"Using OAuth2 token for workspace {workspace.workspace_name}")
+                    return workspace.access_token
+                else:
+                    logger.warning(f"OAuth2 token for workspace {workspace.workspace_name} is invalid")
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting best token: {e}")
+            return None
+    
+    @staticmethod
+    async def set_personal_api_token(workspace_db_id: int, personal_token: str) -> bool:
+        """Set personal API token for a workspace"""
+        try:
+            async with async_session() as session:
+                stmt = select(ClickUpWorkspace).where(ClickUpWorkspace.id == workspace_db_id)
+                result = await session.execute(stmt)
+                workspace = result.scalar_one_or_none()
+                
+                if workspace:
+                    workspace.personal_api_token = personal_token
+                    workspace.updated_at = datetime.utcnow()
+                    await session.commit()
+                    logger.info(f"Set personal API token for workspace {workspace.workspace_name}")
+                    return True
+                
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error setting personal API token: {e}")
+            return False
