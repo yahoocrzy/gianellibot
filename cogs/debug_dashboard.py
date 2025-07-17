@@ -253,7 +253,7 @@ class DebugDashboard(commands.Cog):
         try:
             default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
             if default_workspace:
-                token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
+                token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
                 api = ClickUpAPI(token) if token else None
             else:
                 api = None

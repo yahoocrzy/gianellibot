@@ -128,7 +128,7 @@ class AIConversation(commands.Cog):
         if not default_workspace:
             return "❌ ClickUp not configured properly."
             
-        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
+        token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
         if not token:
             return "❌ ClickUp not configured properly."
             
