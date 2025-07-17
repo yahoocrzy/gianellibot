@@ -217,7 +217,7 @@ class AICompleteDropdown(commands.Cog):
         if not default_workspace:
             clickup_api = None
         else:
-            token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
+            token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
             clickup_api = ClickUpAPI(token) if token else None
         if not clickup_api:
             embed = EmbedFactory.create_error_embed(

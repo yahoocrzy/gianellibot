@@ -207,7 +207,7 @@ class DebugDashboard(commands.Cog):
             try:
                 default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
                 if default_workspace:
-                    token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
+                    token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
                     if token:
                         api = ClickUpAPI(token)
                         embed.add_field(

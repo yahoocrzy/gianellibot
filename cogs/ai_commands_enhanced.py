@@ -27,7 +27,7 @@ class AICommandsEnhanced(commands.Cog):
             return None
             
         # Get decrypted token
-        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
+        token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
         if not token:
             return None
             

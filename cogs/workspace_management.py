@@ -222,9 +222,14 @@ class WorkspaceManagement(commands.Cog):
             is_default = "🏆 " if workspace.id == default_id else ""
             status = "✅ Active" if workspace.is_active else "❌ Inactive"
             
+            # Check token status
+            has_personal_token = "✅ Full Access" if workspace.personal_api_token else "⚠️ OAuth Only"
+            token_emoji = "🔑" if workspace.personal_api_token else "🔐"
+            
             embed.add_field(
                 name=f"{is_default}{workspace.workspace_name}",
                 value=f"• Status: {status}\n"
+                      f"• Access: {token_emoji} {has_personal_token}\n"
                       f"• ID: `{workspace.workspace_id}`\n"
                       f"• Authorized: <t:{int(workspace.authorized_at.timestamp())}:R>",
                 inline=True
@@ -233,12 +238,13 @@ class WorkspaceManagement(commands.Cog):
         embed.add_field(
             name="🛠️ Management Commands",
             value="• `/workspace-switch` - Change default workspace\n"
+                  "• `/workspace-add-token` - Add personal API token\n"
                   "• `/workspace-remove` - Remove a workspace\n"
                   "• `/workspace-clear` - Remove all workspaces",
             inline=False
         )
         
-        embed.set_footer(text="🏆 = Default workspace • OAuth2 tokens never expire")
+        embed.set_footer(text="🏆 = Default • 🔑 = Full Access • 🔐 = OAuth Only (limited)")
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
     

@@ -291,7 +291,7 @@ class CalendarCommands(commands.Cog):
             return None
             
         # Get decrypted token
-        token = await ClickUpOAuthWorkspaceRepository.get_access_token(default_workspace)
+        token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
         if not token:
             return None
             
@@ -812,7 +812,7 @@ class CalendarCommands(commands.Cog):
             for workspace in workspaces:
                 try:
                     # Get API for this workspace
-                    ws_token = await ClickUpOAuthWorkspaceRepository.get_access_token(workspace)
+                    ws_token = await ClickUpOAuthWorkspaceRepository.get_best_token(workspace)
                     ws_api = ClickUpAPI(ws_token)
                     
                     async with ws_api:
