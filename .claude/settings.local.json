@@ -18,7 +18,9 @@
       "Bash(mv:*)",
       "Bash(grep:*)",
       "Bash(test:*)",
-      "WebFetch(domain:help.clickup.com)"
+      "WebFetch(domain:help.clickup.com)",
+      "Bash(git pull:*)",
+      "WebFetch(domain:discord.com)"
     ],
     "deny": []
   }

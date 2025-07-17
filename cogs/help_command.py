@@ -166,5 +166,74 @@ class HelpCommand(commands.Cog):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    @app_commands.command(name="setup-guide", description="Show the complete setup guide")
+    async def setup_guide(self, interaction: discord.Interaction):
+        """Show the complete setup guide"""
+        embed = discord.Embed(
+            title="🎉 ClickBot Setup Guide",
+            description="Follow these steps to get ClickBot fully configured for your server.",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="📋 Step 1: Connect ClickUp (Required)",
+            value="1. Run `/clickup-setup`\n"
+                  "2. Click **🔐 Login with ClickUp**\n"
+                  "3. Sign in and select your workspaces\n"
+                  "4. You'll be redirected back here",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔑 Step 2: Add Personal API Token (Required for Full Access)",
+            value="Due to ClickUp's OAuth limitations, you need a personal token for task operations:\n"
+                  "1. Go to [ClickUp Settings > Apps](https://app.clickup.com/settings/apps)\n"
+                  "2. Find **Personal API Token** and click **Generate**\n"
+                  "3. Copy the token (starts with `pk_`)\n"
+                  "4. Run `/workspace-add-token` and paste it",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🤖 Step 3: Enable AI Features (Optional)",
+            value="For AI-powered task management:\n"
+                  "1. Get a Claude API key from [Anthropic](https://console.anthropic.com/)\n"
+                  "2. Run `/claude-setup` and enter your key\n"
+                  "3. AI commands will be unlocked!",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="✅ Quick Test",
+            value="After setup, try these commands:\n"
+                  "• `/task-create` - Create your first task\n"
+                  "• `/calendar` - View tasks in calendar\n"
+                  "• `/help` - See all available commands",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="⚠️ Important Note",
+            value="Without a personal API token, you'll see **'Team(s) not authorized'** errors. "
+                  "This is a ClickUp limitation - the personal token provides full access to your spaces and tasks.",
+            inline=False
+        )
+        
+        embed.set_footer(text="Need help? Use /help or check out our documentation!")
+        
+        # Create a view with helpful buttons
+        class SetupGuideView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=None)
+                
+                # Add ClickUp setup button
+                self.add_item(discord.ui.Button(
+                    label="ClickUp Settings",
+                    url="https://app.clickup.com/settings/apps",
+                    emoji="🔗"
+                ))
+        
+        await interaction.response.send_message(embed=embed, view=SetupGuideView(), ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(HelpCommand(bot))

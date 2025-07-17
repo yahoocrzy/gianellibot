@@ -121,6 +121,99 @@ class ClickUpBot(commands.Bot):
                 name="ClickUp tasks"
             )
         )
+    
+    async def on_guild_join(self, guild: discord.Guild):
+        """Send setup guide when bot joins a new server"""
+        logger.info(f"Bot joined new guild: {guild.name} (ID: {guild.id})")
+        debug_logger.log_event("guild_join", {"guild_name": guild.name, "guild_id": guild.id})
+        
+        # Find a suitable channel to send the welcome message
+        channel = None
+        
+        # Try system channel first
+        if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
+            channel = guild.system_channel
+        else:
+            # Find the first text channel we can send to
+            for ch in guild.text_channels:
+                if ch.permissions_for(guild.me).send_messages and ch.permissions_for(guild.me).embed_links:
+                    channel = ch
+                    break
+        
+        if not channel:
+            logger.warning(f"Could not find suitable channel to send welcome message in {guild.name}")
+            return
+        
+        # Create the welcome embed
+        embed = discord.Embed(
+            title="🎉 Welcome to ClickBot!",
+            description="Thank you for adding ClickBot to your server! Let's get you set up in just a few minutes.",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="📋 Step 1: Connect ClickUp (Required)",
+            value="1. Run `/clickup-setup`\n"
+                  "2. Click **🔐 Login with ClickUp**\n"
+                  "3. Sign in and select your workspaces\n"
+                  "4. You'll be redirected back here",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔑 Step 2: Add Personal API Token (Required for Full Access)",
+            value="Due to ClickUp's OAuth limitations, you need a personal token for task operations:\n"
+                  "1. Go to [ClickUp Settings > Apps](https://app.clickup.com/settings/apps)\n"
+                  "2. Find **Personal API Token** and click **Generate**\n"
+                  "3. Copy the token (starts with `pk_`)\n"
+                  "4. Run `/workspace-add-token` and paste it",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🤖 Step 3: Enable AI Features (Optional)",
+            value="For AI-powered task management:\n"
+                  "1. Get a Claude API key from [Anthropic](https://console.anthropic.com/)\n"
+                  "2. Run `/claude-setup` and enter your key\n"
+                  "3. AI commands will be unlocked!",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="✅ Quick Test",
+            value="After setup, try these commands:\n"
+                  "• `/task-create` - Create your first task\n"
+                  "• `/calendar` - View tasks in calendar\n"
+                  "• `/help` - See all available commands",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="⚠️ Important Note",
+            value="Without a personal API token, you'll see **'Team(s) not authorized'** errors. "
+                  "This is a ClickUp limitation - the personal token provides full access to your spaces and tasks.",
+            inline=False
+        )
+        
+        embed.set_footer(text="Need help? Use /help or check out our documentation!")
+        
+        # Create a view with helpful buttons
+        class WelcomeView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=None)
+                
+                # Add ClickUp setup button
+                self.add_item(discord.ui.Button(
+                    label="ClickUp Settings",
+                    url="https://app.clickup.com/settings/apps",
+                    emoji="🔗"
+                ))
+        
+        try:
+            await channel.send(embed=embed, view=WelcomeView())
+            logger.info(f"Sent welcome message to {guild.name} in #{channel.name}")
+        except Exception as e:
+            logger.error(f"Failed to send welcome message to {guild.name}: {e}")
         
     async def on_disconnect(self):
         """Handle bot disconnection"""
