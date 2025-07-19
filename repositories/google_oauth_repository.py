@@ -9,7 +9,7 @@ from loguru import logger
 from services.security import encrypt_token, decrypt_token
 
 class GoogleOAuthRepository:
-    """Repository for Google OAuth operations"""
+    """Repository for Google OAuth operations - fixed"""
     
     @staticmethod
     async def create_oauth_state(guild_id: str, user_id: str) -> Tuple[str, str]:
