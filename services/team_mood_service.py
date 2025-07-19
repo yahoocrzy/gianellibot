@@ -257,13 +257,10 @@ class TeamMoodService:
                     original_nick = original_nick.replace(emoji, '').strip()
                     logger.info(f"Removed manually added emoji '{emoji}' from nickname")
             
-            # RESET NICKNAME FIRST to clear Discord cache
+            # RESET NICKNAME FIRST to clear Discord cache (but only if needed)
             if member.display_name != original_nick:
                 logger.info(f"Resetting nickname to clear cache: '{original_nick}'")
                 await member.edit(nick=original_nick, reason="Reset nickname before status update")
-                # Small delay to ensure Discord processes the reset
-                import asyncio
-                await asyncio.sleep(0.5)
             
             # Set new nickname with status emoji at the end
             if status_emoji:

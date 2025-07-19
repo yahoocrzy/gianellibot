@@ -43,31 +43,52 @@ class ReactionRoleHandler(commands.Cog):
                 config.role_away_id: TeamMoodService.STATUS_EMOJIS['away']
             }
             
-            # Remove user's reactions from ALL mood status emojis (including the new one - they'll re-add it)
-            removed_reactions = []
+            # Remove user's reactions from OTHER mood status emojis (not the new one they just clicked)
+            # Get the emoji for the new role they're selecting
+            new_role_emoji = None
             for role_id, emoji in role_emoji_map.items():
-                if role_id:  # Check all emojis, not just other ones
+                if role_id == new_role.id:
+                    new_role_emoji = emoji
+                    break
+            
+            # Create removal tasks to run in parallel for faster execution
+            import asyncio
+            removal_tasks = []
+            
+            for role_id, emoji in role_emoji_map.items():
+                if role_id and role_id != new_role.id:  # Only remove OTHER reactions, not the current one
                     # Find the reaction for this emoji
                     for reaction in message.reactions:
                         if str(reaction.emoji) == emoji:
-                            try:
-                                # Check if user has this reaction first
-                                users = [user async for user in reaction.users()]
-                                if member in users:
-                                    await reaction.remove(member)
-                                    removed_reactions.append(emoji)
-                                    logger.info(f"Removed {member.display_name}'s reaction {emoji} from mood message")
-                            except (discord.Forbidden, discord.HTTPException) as e:
-                                logger.warning(f"Could not remove reaction {emoji} for {member.display_name}: {e}")
+                            # Create a coroutine for removing this reaction
+                            removal_tasks.append(self._remove_user_reaction(reaction, member, emoji))
                             break
             
-            if removed_reactions:
-                logger.info(f"Successfully removed reactions {removed_reactions} for {member.display_name}")
+            # Execute all removals in parallel for instant response
+            if removal_tasks:
+                removed_reactions = await asyncio.gather(*removal_tasks, return_exceptions=True)
+                successful_removals = [r for r in removed_reactions if r is not None and not isinstance(r, Exception)]
+                if successful_removals:
+                    logger.info(f"Successfully removed reactions {successful_removals} for {member.display_name}")
             else:
-                logger.info(f"No existing mood reactions found for {member.display_name} to remove")
-                            
+                logger.info(f"No other mood reactions found for {member.display_name} to remove")
+            
         except Exception as e:
             logger.error(f"Error removing other mood roles and reactions: {e}")
+    
+    async def _remove_user_reaction(self, reaction: discord.Reaction, member: discord.Member, emoji: str):
+        """Helper method to remove a user's reaction and return the emoji if successful"""
+        try:
+            # Check if user has this reaction first (more efficient than getting all users)
+            users = [user async for user in reaction.users()]
+            if member in users:
+                await reaction.remove(member)
+                logger.info(f"Removed {member.display_name}'s reaction {emoji} from mood message")
+                return emoji
+            return None
+        except (discord.Forbidden, discord.HTTPException) as e:
+            logger.warning(f"Could not remove reaction {emoji} for {member.display_name}: {e}")
+            return None
     
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
