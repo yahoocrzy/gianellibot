@@ -1,0 +1,39 @@
+I need you to create a detailed user guide for setting up and using reaction roles in my Discord bot. Here's the technical information about the bot's reaction role system:
+
+COMMAND REFERENCE:
+- /reaction-roles-setup - Creates a new reaction role message in the current channel
+- /reaction-roles-list - Shows all configured reaction roles for the server
+
+TECHNICAL DETAILS:
+- Bot uses SQLAlchemy database with ReactionRole model
+- Supports custom embed colors (7-character hex codes like #FF0000)
+- Has exclusive role support (removes other roles when assigning new one)
+- Stores: guild_id, message_id, channel_id, emoji, role_id, exclusive flag, embed_color
+- Bot automatically handles adding/removing roles when users react
+- Requires Administrator permission to configure
+- Bot needs "Manage Roles" permission and role hierarchy positioning
+
+FEATURES:
+- Multiple emoji-to-role mappings per message
+- Custom embed titles, descriptions, and colors
+- Exclusive vs non-exclusive role assignment
+- Automatic cleanup when reactions are removed
+- Works with both Unicode and custom emojis
+
+SETUP PROCESS:
+1. Run /reaction-roles-setup command
+2. Customize embed appearance 
+3. After message posts, react with desired emojis
+4. Bot prompts to select roles for each emoji
+5. Configure exclusive/non-exclusive behavior
+6. Users can then react to get roles
+
+Please create a comprehensive user guide that explains:
+- How to set up reaction roles step-by-step
+- How to customize the appearance 
+- How exclusive vs non-exclusive roles work
+- Troubleshooting common issues
+- Best practices for organizing roles
+- Required permissions and setup requirements
+
+Make it beginner-friendly but thorough, with clear section headings and examples.

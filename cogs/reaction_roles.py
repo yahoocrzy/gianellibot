@@ -189,6 +189,12 @@ class ReactionRoleSetupView(discord.ui.View):
         except Exception as e:
             # Fallback - send a new message
             await interaction.followup.send(embed=embed, view=self, ephemeral=True)
+    
+    async def update_preview_silent(self):
+        """Update the setup preview without interaction (used after role creation)"""
+        # This method is called when we need to update the preview but don't have an interaction
+        # The actual update will happen when the user next interacts with the setup view
+        pass
 
 class SetTitleModal(discord.ui.Modal, title="Set Message Title"):
     def __init__(self, setup_view):
@@ -273,7 +279,7 @@ class AddRoleModal(discord.ui.Modal, title="Add Role Assignment"):
     
     role_input = discord.ui.TextInput(
         label="Role",
-        placeholder="@Role or role ID",
+        placeholder="@Role, role ID, or new role name to create",
         max_length=100
     )
     
@@ -300,8 +306,11 @@ class AddRoleModal(discord.ui.Modal, title="Add Role Assignment"):
                 role = discord.utils.get(interaction.guild.roles, name=role_text)
         
         if not role:
+            # Role doesn't exist, offer to create it
+            create_view = CreateRoleConfirmView(self.setup_view, role_text, self.emoji.value.strip())
             await interaction.response.send_message(
-                "❌ Could not find that role. Please use a role mention (@role) or role ID.",
+                f"❌ Role '{role_text}' not found. Would you like to create it?",
+                view=create_view,
                 ephemeral=True
             )
             return
@@ -330,6 +339,67 @@ class AddRoleModal(discord.ui.Modal, title="Add Role Assignment"):
         })
         
         await self.setup_view.update_preview(interaction)
+
+class CreateRoleConfirmView(discord.ui.View):
+    def __init__(self, setup_view, role_name, emoji):
+        super().__init__(timeout=60)
+        self.setup_view = setup_view
+        self.role_name = role_name.lstrip('@')  # Remove @ if present
+        self.emoji = emoji
+    
+    @discord.ui.button(label="Create Role", style=discord.ButtonStyle.success, emoji="✅")
+    async def create_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            # Create the role
+            new_role = await interaction.guild.create_role(
+                name=self.role_name,
+                reason=f"Created by {interaction.user} for reaction roles"
+            )
+            
+            # Check if emoji or role already exists in setup
+            for existing in self.setup_view.roles_data:
+                if existing['emoji'] == self.emoji:
+                    await interaction.response.send_message(
+                        "❌ That emoji is already used for another role.",
+                        ephemeral=True
+                    )
+                    return
+                if existing['role_id'] == new_role.id:
+                    await interaction.response.send_message(
+                        "❌ That role is already assigned to another emoji.",
+                        ephemeral=True
+                    )
+                    return
+            
+            # Add role data
+            self.setup_view.roles_data.append({
+                'emoji': self.emoji,
+                'role_id': new_role.id,
+                'exclusive': False
+            })
+            
+            await interaction.response.send_message(
+                f"✅ Role '{new_role.name}' created and added to reaction roles!",
+                ephemeral=True
+            )
+            
+            # Update the preview in the setup view
+            await self.setup_view.update_preview_silent()
+            
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "❌ I don't have permission to create roles. Please check my permissions.",
+                ephemeral=True
+            )
+        except discord.HTTPException as e:
+            await interaction.response.send_message(
+                f"❌ Failed to create role: {str(e)}",
+                ephemeral=True
+            )
+    
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Role creation cancelled.", ephemeral=True)
 
 class RemoveRoleView(discord.ui.View):
     def __init__(self, setup_view):
