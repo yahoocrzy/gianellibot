@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from repositories.reaction_roles import ReactionRoleRepository
+from repositories.team_mood_repository import TeamMoodRepository
 from services.team_mood_service import TeamMoodService
 from loguru import logger
 
@@ -40,7 +41,8 @@ class ReactionRoleHandler(commands.Cog):
                 return
             
             # Check if this is a team mood role for exclusive behavior
-            if await TeamMoodService.is_team_mood_role(guild.id, role.id):
+            is_mood_role = await TeamMoodService.is_team_mood_role(guild.id, role.id)
+            if is_mood_role:
                 # Remove other mood roles first
                 await TeamMoodService.remove_other_mood_roles(member, role)
             
@@ -49,6 +51,14 @@ class ReactionRoleHandler(commands.Cog):
                 try:
                     await member.add_roles(role, reason="Reaction role assignment")
                     logger.info(f"Added role {role.name} to {member.display_name} in {guild.name}")
+                    
+                    # Update nickname with status emoji if this is a mood role
+                    if is_mood_role:
+                        config = await TeamMoodRepository.get_config(guild.id)
+                        if config:
+                            emoji = TeamMoodService.get_emoji_for_role(role.id, config)
+                            await TeamMoodService.update_member_nickname(member, emoji)
+                            
                 except discord.Forbidden:
                     logger.error(f"Missing permissions to add role {role.name} to {member.display_name}")
                 except discord.HTTPException as e:
@@ -92,6 +102,11 @@ class ReactionRoleHandler(commands.Cog):
                 try:
                     await member.remove_roles(role, reason="Reaction role removal")
                     logger.info(f"Removed role {role.name} from {member.display_name} in {guild.name}")
+                    
+                    # Remove status emoji from nickname if this is a mood role
+                    if await TeamMoodService.is_team_mood_role(guild.id, role.id):
+                        await TeamMoodService.update_member_nickname(member, None)
+                        
                 except discord.Forbidden:
                     logger.error(f"Missing permissions to remove role {role.name} from {member.display_name}")
                 except discord.HTTPException as e:

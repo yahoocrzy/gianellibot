@@ -22,7 +22,7 @@ class TeamMoodService:
         'ready': 0x00D166,  # Green
         'phone': 0xFEE75C,  # Yellow
         'dnd': 0xED4245,    # Red
-        'away': 0xA0A0A0    # Brighter Gray
+        'away': 0x5DADE2    # Bright Blue
     }
     
     @staticmethod
@@ -204,3 +204,52 @@ class TeamMoodService:
                 counts['away'] = len(role.members)
         
         return counts
+    
+    @staticmethod
+    async def update_member_nickname(member: discord.Member, status_emoji: str = None):
+        """Update member nickname to show status emoji at the end"""
+        try:
+            # Get the original nickname (without any status emojis)
+            current_nick = member.display_name
+            
+            # Remove any existing status emojis from the end of nickname
+            emoji_list = ['✅', '⚠️', '🛑', '💤']
+            original_nick = current_nick
+            for emoji in emoji_list:
+                if original_nick.endswith(' ' + emoji):
+                    original_nick = original_nick[:-2]  # Remove space and emoji
+                    break
+            
+            # Set new nickname with status emoji at the end
+            if status_emoji:
+                new_nick = f"{original_nick} {status_emoji}"
+                # Discord nickname limit is 32 characters
+                if len(new_nick) > 32:
+                    # Truncate the original name to fit
+                    max_name_length = 32 - 2  # Account for space and emoji
+                    original_nick = original_nick[:max_name_length]
+                    new_nick = f"{original_nick} {status_emoji}"
+            else:
+                new_nick = original_nick
+            
+            # Only update if the nickname actually changed
+            if member.display_name != new_nick:
+                await member.edit(nick=new_nick, reason="Team mood status update")
+                
+        except discord.Forbidden:
+            pass  # Can't change nickname, continue without error
+        except discord.HTTPException:
+            pass  # Other Discord error, continue without error
+    
+    @staticmethod
+    def get_emoji_for_role(role_id: int, config) -> Optional[str]:
+        """Get the emoji associated with a specific role"""
+        if role_id == config.role_ready_id:
+            return TeamMoodService.STATUS_EMOJIS['ready']
+        elif role_id == config.role_phone_id:
+            return TeamMoodService.STATUS_EMOJIS['phone']
+        elif role_id == config.role_dnd_id:
+            return TeamMoodService.STATUS_EMOJIS['dnd']
+        elif role_id == config.role_away_id:
+            return TeamMoodService.STATUS_EMOJIS['away']
+        return None
