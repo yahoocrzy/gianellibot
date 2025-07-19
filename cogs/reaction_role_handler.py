@@ -153,23 +153,26 @@ class ReactionRoleHandler(commands.Cog):
             if not member:
                 return
             
+            # Check for reset reaction first (before database lookup)
+            if str(payload.emoji) == TeamMoodService.STATUS_EMOJIS['reset']:
+                logger.info(f"Processing reset reaction for {member.display_name}")
+                # Check if this is on a team mood message
+                config = await TeamMoodRepository.get_config(guild.id)
+                if config and payload.message_id == config.message_id:
+                    # Remove all mood roles and clear nickname
+                    await TeamMoodService.remove_all_mood_roles(member)
+                    await TeamMoodService.update_member_nickname(member, None)
+                    
+                    # Remove all mood reactions for this user
+                    await self.remove_all_mood_reactions(member, payload.message_id, payload.channel_id)
+                return
+            
             # Check for reaction role mapping
             reaction_role = await ReactionRoleRepository.get_by_message_and_emoji(
                 guild.id, payload.message_id, str(payload.emoji)
             )
             
             if not reaction_role:
-                return
-            
-            # Handle reset reaction (special case - role_id = 0)
-            if reaction_role.role_id == 0 and str(payload.emoji) == TeamMoodService.STATUS_EMOJIS['reset']:
-                logger.info(f"Processing reset reaction for {member.display_name}")
-                # Remove all mood roles and clear nickname
-                await TeamMoodService.remove_all_mood_roles(member)
-                await TeamMoodService.update_member_nickname(member, None)
-                
-                # Remove all mood reactions for this user
-                await self.remove_all_mood_reactions(member, payload.message_id, payload.channel_id)
                 return
             
             # Get the role
