@@ -13,11 +13,11 @@ class TeamMoodService:
     }
     
     STATUS_NAMES = {
-        'ready': '✅ Ready to Work',
-        'phone': '⚠️ Phone Only',
-        'dnd': '🛑 Do not disturb!',
-        'away': '💤 Need time',
-        'reset': '❌ Clear Status'
+        'ready': 'Ready to Work',
+        'phone': 'Phone Only',
+        'dnd': 'Do not disturb!',
+        'away': 'Need time',
+        'reset': 'Clear Status'
     }
     
     STATUS_NAMES_CLEAN = {
