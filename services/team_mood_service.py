@@ -289,11 +289,15 @@ class TeamMoodService:
             logger.info(f"Updating nickname for {member.name} (current: '{current_nick}') with emoji: {status_emoji}")
             
             # Remove ALL existing status emojis from the nickname (handle stacking and placement anywhere)
-            emoji_list = ['✅', '⚠️', '🛑', '💤']  # Don't include reset emoji in cleanup
+            # Include both forms of warning emoji to handle encoding variations
+            emoji_list = ['✅', '⚠️', '⚠', '🛑', '💤']  # Don't include reset emoji in cleanup
             original_nick = current_nick
             
             # AGGRESSIVE CLEANUP: Remove ALL status emojis from ANYWHERE in the nickname
             for emoji in emoji_list:
+                # Debug logging for warning emoji specifically
+                if emoji in ['⚠️', '⚠'] and emoji in original_nick:
+                    logger.info(f"DEBUG: Found warning emoji '{emoji}' in nickname '{original_nick}' (len={len(emoji)}, bytes={emoji.encode('utf-8').hex()})")
                 # Remove from end with space
                 while original_nick.endswith(' ' + emoji):
                     original_nick = original_nick[:-2]

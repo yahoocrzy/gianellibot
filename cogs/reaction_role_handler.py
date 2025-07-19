@@ -305,7 +305,8 @@ class ReactionRoleHandler(commands.Cog):
             return
         
         # Check if user manually added status emojis to their nickname
-        emoji_list = ['✅', '⚠️', '🛑', '💤']
+        # Include both forms of warning emoji to handle encoding variations
+        emoji_list = ['✅', '⚠️', '⚠', '🛑', '💤']
         user_added_emoji = False
         
         for emoji in emoji_list:
@@ -319,7 +320,7 @@ class ReactionRoleHandler(commands.Cog):
                     if emoji == '✅' and config.role_ready_id:
                         role = after.guild.get_role(config.role_ready_id)
                         user_has_matching_role = role in after.roles
-                    elif emoji == '⚠️' and config.role_phone_id:
+                    elif (emoji == '⚠️' or emoji == '⚠') and config.role_phone_id:
                         role = after.guild.get_role(config.role_phone_id)
                         user_has_matching_role = role in after.roles
                     elif emoji == '🛑' and config.role_dnd_id:
