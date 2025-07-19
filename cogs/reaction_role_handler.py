@@ -54,10 +54,16 @@ class ReactionRoleHandler(commands.Cog):
                     
                     # Update nickname with status emoji if this is a mood role
                     if is_mood_role:
+                        logger.info(f"Role {role.name} is a team mood role, updating nickname for {member.display_name}")
                         config = await TeamMoodRepository.get_config(guild.id)
                         if config:
                             emoji = TeamMoodService.get_emoji_for_role(role.id, config)
+                            logger.info(f"Got emoji '{emoji}' for role {role.name}")
                             await TeamMoodService.update_member_nickname(member, emoji)
+                        else:
+                            logger.warning(f"No team mood config found for guild {guild.id}")
+                    else:
+                        logger.info(f"Role {role.name} is not a team mood role, skipping nickname update")
                             
                 except discord.Forbidden:
                     logger.error(f"Missing permissions to add role {role.name} to {member.display_name}")

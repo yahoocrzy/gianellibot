@@ -208,9 +208,11 @@ class TeamMoodService:
     @staticmethod
     async def update_member_nickname(member: discord.Member, status_emoji: str = None):
         """Update member nickname to show status emoji at the end"""
+        from loguru import logger
         try:
             # Get the original nickname (without any status emojis)
             current_nick = member.display_name
+            logger.info(f"Updating nickname for {member.name} (current: '{current_nick}') with emoji: {status_emoji}")
             
             # Remove any existing status emojis from the end of nickname
             emoji_list = ['✅', '⚠️', '🛑', '💤']
@@ -218,6 +220,7 @@ class TeamMoodService:
             for emoji in emoji_list:
                 if original_nick.endswith(' ' + emoji):
                     original_nick = original_nick[:-2]  # Remove space and emoji
+                    logger.info(f"Removed existing emoji '{emoji}' from nickname")
                     break
             
             # Set new nickname with status emoji at the end
@@ -229,17 +232,24 @@ class TeamMoodService:
                     max_name_length = 32 - 2  # Account for space and emoji
                     original_nick = original_nick[:max_name_length]
                     new_nick = f"{original_nick} {status_emoji}"
+                    logger.info(f"Truncated nickname to fit 32 char limit: '{new_nick}'")
             else:
                 new_nick = original_nick
+                logger.info(f"Removing status emoji, restoring to: '{new_nick}'")
             
             # Only update if the nickname actually changed
             if member.display_name != new_nick:
                 await member.edit(nick=new_nick, reason="Team mood status update")
+                logger.info(f"Successfully updated nickname to: '{new_nick}'")
+            else:
+                logger.info(f"Nickname unchanged: '{member.display_name}'")
                 
-        except discord.Forbidden:
-            pass  # Can't change nickname, continue without error
-        except discord.HTTPException:
-            pass  # Other Discord error, continue without error
+        except discord.Forbidden as e:
+            logger.error(f"Permission denied changing nickname for {member.name}: {e}")
+        except discord.HTTPException as e:
+            logger.error(f"HTTP error changing nickname for {member.name}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error changing nickname for {member.name}: {e}")
     
     @staticmethod
     def get_emoji_for_role(role_id: int, config) -> Optional[str]:
