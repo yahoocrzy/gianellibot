@@ -12,17 +12,17 @@ class TeamMoodService:
     }
     
     STATUS_NAMES = {
-        'ready': 'Ready to Work',
-        'phone': 'Phone Only',
-        'dnd': 'Do not disturb!',
-        'away': 'Need time'
+        'ready': '✅ Ready to Work',
+        'phone': '⚠️ Phone Only',
+        'dnd': '🛑 Do not disturb!',
+        'away': '💤 Need time'
     }
     
     STATUS_COLORS = {
         'ready': 0x00D166,  # Green
         'phone': 0xFEE75C,  # Yellow
         'dnd': 0xED4245,    # Red
-        'away': 0x747F8D    # Gray
+        'away': 0xA0A0A0    # Brighter Gray
     }
     
     @staticmethod
