@@ -8,21 +8,24 @@ class TeamMoodService:
         'ready': '✅',
         'phone': '⚠️',
         'dnd': '🛑',
-        'away': '💤'
+        'away': '💤',
+        'reset': '❌'
     }
     
     STATUS_NAMES = {
         'ready': '✅ Ready to Work',
         'phone': '⚠️ Phone Only',
         'dnd': '🛑 Do not disturb!',
-        'away': '💤 Need time'
+        'away': '💤 Need time',
+        'reset': '❌ Clear Status'
     }
     
     STATUS_NAMES_CLEAN = {
         'ready': 'Ready to Work',
         'phone': 'Phone Only',
         'dnd': 'Do not disturb!',
-        'away': 'Need time'
+        'away': 'Need time',
+        'reset': 'Clear Status'
     }
     
     STATUS_COLORS = {
@@ -43,9 +46,10 @@ class TeamMoodService:
             embed = await TeamMoodService.generate_status_embed()
             message = await channel.send(embed=embed)
             
-            # Step 3: Add reaction emojis in order
-            for emoji in TeamMoodService.STATUS_EMOJIS.values():
-                await message.add_reaction(emoji)
+            # Step 3: Add reaction emojis in order (status emojis + reset)
+            status_order = ['ready', 'phone', 'dnd', 'away', 'reset']
+            for status in status_order:
+                await message.add_reaction(TeamMoodService.STATUS_EMOJIS[status])
             
             # Step 4: Configure reaction roles for each emoji-role pair
             reaction_configs = [
@@ -66,6 +70,17 @@ class TeamMoodService:
                     exclusive=False,  # Important: allows status removal
                     embed_color="#5865F2"
                 )
+            
+            # Step 4b: Add reset reaction entry (special - no role assigned)
+            await ReactionRoleRepository.create(
+                guild_id=guild.id,
+                message_id=message.id,
+                channel_id=channel.id,
+                emoji=TeamMoodService.STATUS_EMOJIS['reset'],
+                role_id=0,  # Special value for reset - no role
+                exclusive=False,
+                embed_color="#5865F2"
+            )
             
             # Step 5: Save team mood configuration
             await TeamMoodRepository.create_config(
@@ -143,8 +158,9 @@ class TeamMoodService:
                 f"{TeamMoodService.STATUS_EMOJIS['ready']} **{TeamMoodService.STATUS_NAMES_CLEAN['ready']}** - Available for tasks and collaboration\n"
                 f"{TeamMoodService.STATUS_EMOJIS['phone']} **{TeamMoodService.STATUS_NAMES_CLEAN['phone']}** - Limited availability, urgent matters only\n"
                 f"{TeamMoodService.STATUS_EMOJIS['dnd']} **{TeamMoodService.STATUS_NAMES_CLEAN['dnd']}** - Focus mode, please don't interrupt\n"
-                f"{TeamMoodService.STATUS_EMOJIS['away']} **{TeamMoodService.STATUS_NAMES_CLEAN['away']}** - Taking a break, will respond later\n\n"
-                "*Click a reaction to update your status. Remove to clear.*"
+                f"{TeamMoodService.STATUS_EMOJIS['away']} **{TeamMoodService.STATUS_NAMES_CLEAN['away']}** - Taking a break, will respond later\n"
+                f"{TeamMoodService.STATUS_EMOJIS['reset']} **{TeamMoodService.STATUS_NAMES_CLEAN['reset']}** - Remove your status\n\n"
+                "*Click a reaction to update your status.*"
             ),
             color=0x5865F2
         )
@@ -161,6 +177,32 @@ class TeamMoodService:
         mood_roles = [config.role_ready_id, config.role_phone_id, 
                       config.role_dnd_id, config.role_away_id]
         return role_id in mood_roles
+    
+    @staticmethod
+    async def remove_all_mood_roles(member: discord.Member):
+        """Remove all mood roles from a member (for reset functionality)"""
+        config = await TeamMoodRepository.get_config(member.guild.id)
+        if not config:
+            return
+        
+        mood_role_ids = [config.role_ready_id, config.role_phone_id, 
+                         config.role_dnd_id, config.role_away_id]
+        
+        # Remove all mood roles
+        removed_roles = []
+        for role in member.roles:
+            if role.id in mood_role_ids:
+                try:
+                    await member.remove_roles(role, reason="Team mood status reset")
+                    removed_roles.append(role.name)
+                except discord.Forbidden:
+                    pass  # Continue if can't remove role
+        
+        from loguru import logger
+        if removed_roles:
+            logger.info(f"Reset: Removed mood roles {removed_roles} from {member.display_name}")
+        else:
+            logger.info(f"Reset: No mood roles to remove from {member.display_name}")
     
     @staticmethod
     async def remove_other_mood_roles(member: discord.Member, new_role: discord.Role):
@@ -228,7 +270,7 @@ class TeamMoodService:
             logger.info(f"Updating nickname for {member.name} (current: '{current_nick}') with emoji: {status_emoji}")
             
             # Remove ALL existing status emojis from the end of nickname (handle stacking)
-            emoji_list = ['✅', '⚠️', '🛑', '💤']
+            emoji_list = ['✅', '⚠️', '🛑', '💤']  # Don't include reset emoji in cleanup
             original_nick = current_nick
             
             # Keep removing emojis until none are found (handles multiple stacked emojis)

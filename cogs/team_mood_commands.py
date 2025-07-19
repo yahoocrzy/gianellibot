@@ -246,9 +246,10 @@ class TeamMoodCommands(commands.Cog):
             embed_msg = await TeamMoodService.generate_status_embed()
             message = await channel.send(embed=embed_msg)
             
-            # Add reactions
-            for emoji in TeamMoodService.STATUS_EMOJIS.values():
-                await message.add_reaction(emoji)
+            # Add reactions in proper order
+            status_order = ['ready', 'phone', 'dnd', 'away', 'reset']
+            for status in status_order:
+                await message.add_reaction(TeamMoodService.STATUS_EMOJIS[status])
             
             # Update message ID in config
             config.message_id = message.id
@@ -283,6 +284,17 @@ class TeamMoodCommands(commands.Cog):
                         exclusive=False,
                         embed_color="#5865F2"
                     )
+            
+            # Add reset reaction entry
+            await ReactionRoleRepository.create(
+                guild_id=config.guild_id,
+                message_id=message.id,
+                channel_id=channel.id,
+                emoji=TeamMoodService.STATUS_EMOJIS['reset'],
+                role_id=0,  # Special value for reset
+                exclusive=False,
+                embed_color="#5865F2"
+            )
             
             embed = EmbedFactory.create_success_embed(
                 "Team Mood Message Refreshed",

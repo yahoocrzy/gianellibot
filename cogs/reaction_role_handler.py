@@ -76,6 +76,52 @@ class ReactionRoleHandler(commands.Cog):
         except Exception as e:
             logger.error(f"Error removing other mood roles and reactions: {e}")
     
+    async def remove_all_mood_reactions(self, member: discord.Member, message_id: int, channel_id: int):
+        """Remove all mood reactions from a user (for reset functionality)"""
+        try:
+            logger.info(f"Removing all mood reactions for {member.display_name}")
+            
+            # Get team mood config
+            config = await TeamMoodRepository.get_config(member.guild.id)
+            if not config:
+                logger.warning(f"No team mood config found for guild {member.guild.id}")
+                return
+            
+            # Get the message
+            channel = member.guild.get_channel(channel_id)
+            if not channel:
+                logger.warning(f"Channel {channel_id} not found")
+                return
+            
+            try:
+                message = await channel.fetch_message(message_id)
+            except (discord.NotFound, discord.Forbidden) as e:
+                logger.warning(f"Could not fetch mood message {message_id}: {e}")
+                return
+            
+            # Remove all mood reactions (including reset)
+            all_mood_emojis = list(TeamMoodService.STATUS_EMOJIS.values())
+            
+            removal_tasks = []
+            for emoji in all_mood_emojis:
+                for reaction in message.reactions:
+                    if str(reaction.emoji) == emoji:
+                        removal_tasks.append(self._remove_user_reaction(reaction, member, emoji))
+                        break
+            
+            # Execute all removals in parallel
+            if removal_tasks:
+                import asyncio
+                removed_reactions = await asyncio.gather(*removal_tasks, return_exceptions=True)
+                successful_removals = [r for r in removed_reactions if r is not None and not isinstance(r, Exception)]
+                if successful_removals:
+                    logger.info(f"Reset: Removed all reactions {successful_removals} for {member.display_name}")
+            else:
+                logger.info(f"Reset: No mood reactions found for {member.display_name} to remove")
+                
+        except Exception as e:
+            logger.error(f"Error removing all mood reactions: {e}")
+    
     async def _remove_user_reaction(self, reaction: discord.Reaction, member: discord.Member, emoji: str):
         """Helper method to remove a user's reaction and return the emoji if successful"""
         try:
@@ -113,6 +159,17 @@ class ReactionRoleHandler(commands.Cog):
             )
             
             if not reaction_role:
+                return
+            
+            # Handle reset reaction (special case - role_id = 0)
+            if reaction_role.role_id == 0 and str(payload.emoji) == TeamMoodService.STATUS_EMOJIS['reset']:
+                logger.info(f"Processing reset reaction for {member.display_name}")
+                # Remove all mood roles and clear nickname
+                await TeamMoodService.remove_all_mood_roles(member)
+                await TeamMoodService.update_member_nickname(member, None)
+                
+                # Remove all mood reactions for this user
+                await self.remove_all_mood_reactions(member, payload.message_id, payload.channel_id)
                 return
             
             # Get the role
