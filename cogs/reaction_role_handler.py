@@ -120,6 +120,48 @@ class ReactionRoleHandler(commands.Cog):
                     
         except Exception as e:
             logger.error(f"Error in on_raw_reaction_remove: {e}")
+    
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        """Monitor nickname changes and remove manually added status emojis"""
+        # Only check if nickname changed
+        if before.display_name == after.display_name:
+            return
+        
+        # Check if user manually added status emojis to their nickname
+        emoji_list = ['✅', '⚠️', '🛑', '💤']
+        user_added_emoji = False
+        
+        for emoji in emoji_list:
+            if emoji in after.display_name:
+                # Check if they actually have a team mood role for this emoji
+                config = await TeamMoodRepository.get_config(after.guild.id)
+                if config:
+                    user_has_matching_role = False
+                    
+                    # Check which emoji corresponds to which role they have
+                    if emoji == '✅' and config.role_ready_id:
+                        role = after.guild.get_role(config.role_ready_id)
+                        user_has_matching_role = role in after.roles
+                    elif emoji == '⚠️' and config.role_phone_id:
+                        role = after.guild.get_role(config.role_phone_id)
+                        user_has_matching_role = role in after.roles
+                    elif emoji == '🛑' and config.role_dnd_id:
+                        role = after.guild.get_role(config.role_dnd_id)
+                        user_has_matching_role = role in after.roles
+                    elif emoji == '💤' and config.role_away_id:
+                        role = after.guild.get_role(config.role_away_id)
+                        user_has_matching_role = role in after.roles
+                    
+                    # If they have the emoji but not the role, they added it manually
+                    if not user_has_matching_role:
+                        user_added_emoji = True
+                        break
+        
+        # If user manually added emojis, clean their nickname
+        if user_added_emoji:
+            logger.info(f"User {after.name} manually added status emoji to nickname, cleaning it")
+            await TeamMoodService.update_member_nickname(after, None)
 
 async def setup(bot):
     await bot.add_cog(ReactionRoleHandler(bot))
