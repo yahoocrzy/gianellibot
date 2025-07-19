@@ -117,17 +117,42 @@ class TeamMoodService:
         
         created_roles = {}
         
+        # Map of old emoji names to clean names for migration
+        old_emoji_names = {
+            'ready': '✅ Ready to Work',
+            'phone': '⚠️ Phone Only', 
+            'dnd': '🛑 Do not disturb!',
+            'away': '💤 Need time'
+        }
+        
         for key, config in role_configs.items():
-            # Check if role already exists
+            # Check if role already exists (try both new clean name and old emoji name)
             existing_role = discord.utils.get(guild.roles, name=config['name'])
+            if not existing_role and key in old_emoji_names:
+                existing_role = discord.utils.get(guild.roles, name=old_emoji_names[key])
             
             if existing_role:
-                # Update existing role color if needed
+                # Update existing role name and color if needed
+                needs_update = False
+                updates = {}
+                
+                if existing_role.name != config['name']:
+                    updates['name'] = config['name']
+                    needs_update = True
+                    
                 if existing_role.color.value != config['color']:
+                    updates['color'] = discord.Color(config['color'])
+                    needs_update = True
+                
+                if needs_update:
                     try:
-                        await existing_role.edit(color=discord.Color(config['color']))
+                        old_name = existing_role.name
+                        await existing_role.edit(**updates)
+                        from loguru import logger
+                        logger.info(f"Updated role '{old_name}' to '{config['name']}'")
                     except discord.Forbidden:
-                        pass  # Continue if can't edit color
+                        pass  # Continue if can't edit role
+                        
                 created_roles[key] = existing_role
             else:
                 # Create new role
