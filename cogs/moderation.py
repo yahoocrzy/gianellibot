@@ -1,20 +1,19 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from typing import Optional, Union, Literal
-from datetime import datetime, timedelta
+from typing import Optional
+from datetime import datetime
 from utils.embed_factory import EmbedFactory
 from loguru import logger
 
-class PurgeConfirmView(discord.ui.View):
-    def __init__(self, purge_data: dict, timeout: int = 60):
+class ClearConfirmView(discord.ui.View):
+    def __init__(self, clear_data: dict, timeout: int = 60):
         super().__init__(timeout=timeout)
-        self.purge_data = purge_data
+        self.clear_data = clear_data
         self.confirmed = False
     
-    @discord.ui.button(label="Confirm Purge", style=discord.ButtonStyle.danger, emoji="🗑️")
-    async def confirm_purge(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Prevent multiple clicks
+    @discord.ui.button(label="🗑️ Confirm Clear", style=discord.ButtonStyle.danger)
+    async def confirm_clear(self, interaction: discord.Interaction, button: discord.ui.Button):
         if hasattr(self, '_responded'):
             return
             
@@ -22,40 +21,53 @@ class PurgeConfirmView(discord.ui.View):
         self.confirmed = True
         self.stop()
         
-        # Perform the actual purge
-        await interaction.response.edit_message(content="🗑️ Purging messages...", embed=None, view=None)
+        # Show clearing progress
+        await interaction.response.edit_message(content="🗑️ Clearing messages...", embed=None, view=None)
         
         try:
-            deleted_messages = await self.purge_data['channel'].purge(
-                limit=self.purge_data['amount'],
-                check=self.purge_data.get('check'),
-                before=self.purge_data.get('before'),
-                after=self.purge_data.get('after'),
-                around=self.purge_data.get('around'),
-                oldest_first=self.purge_data.get('oldest_first', False),
-                bulk=True
-            )
+            channel = self.clear_data['channel']
+            amount = self.clear_data['amount']
+            
+            if amount == "all":
+                # Clear entire chat history in batches
+                total_deleted = 0
+                batch_size = 100
+                
+                while True:
+                    # Get messages in batches
+                    messages = [message async for message in channel.history(limit=batch_size)]
+                    if not messages:
+                        break
+                    
+                    # Delete messages (Discord bulk delete for efficiency)
+                    deleted = await channel.delete_messages(messages)
+                    total_deleted += len(deleted)
+                    
+                    # Break if we deleted fewer than batch_size (reached end)
+                    if len(messages) < batch_size:
+                        break
+                
+                result_text = f"✅ Cleared **entire chat history** ({total_deleted} messages)"
+            else:
+                # Clear specific amount
+                deleted_messages = await channel.purge(limit=amount, bulk=True)
+                total_deleted = len(deleted_messages)
+                result_text = f"✅ Cleared **{total_deleted}** messages"
             
             # Create success embed
             embed = EmbedFactory.create_success_embed(
-                "Messages Purged Successfully",
-                f"✅ Deleted **{len(deleted_messages)}** messages from {self.purge_data['channel'].mention}"
+                "Chat Cleared Successfully",
+                result_text + f" from {channel.mention}"
             )
             
             embed.add_field(name="Requested by", value=interaction.user.mention, inline=True)
-            embed.add_field(name="Channel", value=self.purge_data['channel'].mention, inline=True)
+            embed.add_field(name="Channel", value=channel.mention, inline=True)
             embed.add_field(name="Timestamp", value=f"<t:{int(datetime.now().timestamp())}:F>", inline=False)
-            
-            # Add filter information if applicable
-            if self.purge_data.get('user'):
-                embed.add_field(name="User Filter", value=self.purge_data['user'].mention, inline=True)
-            if self.purge_data.get('contains'):
-                embed.add_field(name="Content Filter", value=f"`{self.purge_data['contains']}`", inline=True)
             
             await interaction.edit_original_response(embed=embed)
             
             # Log the action
-            logger.info(f"Purged {len(deleted_messages)} messages from {self.purge_data['channel'].name} by {interaction.user}")
+            logger.info(f"Cleared {total_deleted} messages from {channel.name} by {interaction.user}")
             
         except discord.Forbidden:
             embed = EmbedFactory.create_error_embed(
@@ -65,14 +77,13 @@ class PurgeConfirmView(discord.ui.View):
             await interaction.edit_original_response(embed=embed)
         except discord.HTTPException as e:
             embed = EmbedFactory.create_error_embed(
-                "Purge Failed",
-                f"❌ Failed to purge messages: {str(e)}"
+                "Clear Failed",
+                f"❌ Failed to clear messages: {str(e)}"
             )
             await interaction.edit_original_response(embed=embed)
     
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
-    async def cancel_purge(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Prevent multiple clicks
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_clear(self, interaction: discord.Interaction, button: discord.ui.Button):
         if hasattr(self, '_responded'):
             return
             
@@ -81,8 +92,8 @@ class PurgeConfirmView(discord.ui.View):
         self.stop()
         
         embed = EmbedFactory.create_info_embed(
-            "Purge Cancelled",
-            "❌ Message purge has been cancelled."
+            "Clear Cancelled",
+            "❌ Message clearing has been cancelled."
         )
         await interaction.response.edit_message(embed=embed, view=None)
 
@@ -92,23 +103,19 @@ class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    @app_commands.command(name="purge", description="Delete multiple messages from a channel")
+    @app_commands.command(name="clear", description="Clear messages from a channel")
     @app_commands.describe(
-        amount="Number of messages to delete (1-100)",
-        user="Only delete messages from this user",
-        contains="Only delete messages containing this text",
-        channel="Channel to purge from (default: current channel)"
+        amount="Number of messages to clear (1-1000), or 'all' to clear entire chat",
+        channel="Channel to clear from (default: current channel)"
     )
     @app_commands.default_permissions(manage_messages=True)
-    async def purge(
+    async def clear(
         self,
         interaction: discord.Interaction,
-        amount: app_commands.Range[int, 1, 100],
-        user: Optional[discord.Member] = None,
-        contains: Optional[str] = None,
+        amount: str,
         channel: Optional[discord.TextChannel] = None
     ):
-        """Purge messages with various filters and safety confirmations"""
+        """Clear messages from a channel - supports specific amounts or entire chat"""
         
         # Use current channel if none specified
         target_channel = channel or interaction.channel
@@ -138,321 +145,75 @@ class Moderation(commands.Cog):
             )
             return
         
-        # Build check function for filtering
-        def check(message):
-            # Skip pinned messages
-            if message.pinned:
-                return False
-            
-            # User filter
-            if user and message.author != user:
-                return False
-            
-            # Content filter
-            if contains and contains.lower() not in message.content.lower():
-                return False
-            
-            # Don't delete messages older than 14 days (Discord limitation)
-            if datetime.utcnow() - message.created_at > timedelta(days=14):
-                return False
-            
-            return True
+        # Parse amount parameter
+        if amount.lower() == "all":
+            clear_amount = "all"
+            amount_text = "**entire chat history**"
+            danger_level = "EXTREME"
+        else:
+            try:
+                clear_amount = int(amount)
+                if clear_amount < 1 or clear_amount > 1000:
+                    await interaction.response.send_message(
+                        "❌ Amount must be between 1 and 1000, or 'all' to clear entire chat.",
+                        ephemeral=True
+                    )
+                    return
+                amount_text = f"**{clear_amount}** messages"
+                danger_level = "HIGH" if clear_amount >= 50 else "MEDIUM"
+            except ValueError:
+                await interaction.response.send_message(
+                    "❌ Invalid amount. Use a number (1-1000) or 'all' to clear entire chat.",
+                    ephemeral=True
+                )
+                return
         
-        # Prepare purge data
-        purge_data = {
+        # Prepare clear data
+        clear_data = {
             'channel': target_channel,
-            'amount': amount,
-            'check': check if (user or contains) else None,
-            'user': user,
-            'contains': contains
+            'amount': clear_amount
         }
         
         # Create confirmation embed
-        embed = EmbedFactory.create_warning_embed(
-            "Confirm Message Purge",
-            f"⚠️ You are about to delete up to **{amount}** messages from {target_channel.mention}"
+        if danger_level == "EXTREME":
+            embed_color = 0xFF0000  # Red
+            warning_text = "🚨 **DANGER**: This will delete ALL messages in the channel!"
+        elif danger_level == "HIGH":
+            embed_color = 0xFF6600  # Orange
+            warning_text = "⚠️ **WARNING**: This will delete a large number of messages!"
+        else:
+            embed_color = 0xFFCC00  # Yellow
+            warning_text = "⚠️ **CAUTION**: This action cannot be undone!"
+        
+        embed = discord.Embed(
+            title="Confirm Message Clear",
+            description=f"You are about to clear {amount_text} from {target_channel.mention}",
+            color=embed_color
         )
         
-        # Add filter information
-        filters = []
-        if user:
-            filters.append(f"👤 **User:** {user.mention}")
-        if contains:
-            filters.append(f"💬 **Contains:** `{contains}`")
-        if not filters:
-            filters.append("🔄 **No filters** - All recent messages")
-        
-        embed.add_field(name="Filters Applied", value="\n".join(filters), inline=False)
-        embed.add_field(name="⚠️ Warning", value="This action cannot be undone!", inline=False)
+        embed.add_field(name="⚠️ Warning", value=warning_text, inline=False)
+        embed.add_field(name="Channel", value=target_channel.mention, inline=True)
+        embed.add_field(name="Requested by", value=interaction.user.mention, inline=True)
         embed.set_footer(text="You have 60 seconds to confirm or cancel this action.")
         
-        # Show confirmation dialog
-        if amount >= 10:  # Show confirmation for 10+ messages
-            view = PurgeConfirmView(purge_data)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-            
-            # Wait for confirmation with timeout
-            timed_out = await view.wait()
-            
-            if timed_out or not view.confirmed:
-                # User didn't confirm or timed out
-                timeout_embed = EmbedFactory.create_info_embed(
-                    "Purge Cancelled" if not timed_out else "Purge Timed Out",
-                    "❌ Purge cancelled. No messages were deleted." if not timed_out else "❌ Purge confirmation timed out. No messages were deleted."
-                )
-                try:
-                    await interaction.edit_original_response(embed=timeout_embed, view=None)
-                except discord.NotFound:
-                    # Message was already edited/deleted
-                    pass
-        else:
-            # For small amounts, purge immediately
-            await interaction.response.defer(ephemeral=True)
-            
-            try:
-                deleted_messages = await target_channel.purge(
-                    limit=amount,
-                    check=check if (user or contains) else None,
-                    bulk=True
-                )
-                
-                embed = EmbedFactory.create_success_embed(
-                    "Messages Purged",
-                    f"✅ Deleted **{len(deleted_messages)}** messages from {target_channel.mention}"
-                )
-                
-                embed.add_field(name="Requested by", value=interaction.user.mention, inline=True)
-                if user:
-                    embed.add_field(name="User Filter", value=user.mention, inline=True)
-                if contains:
-                    embed.add_field(name="Content Filter", value=f"`{contains}`", inline=True)
-                
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                
-                logger.info(f"Purged {len(deleted_messages)} messages from {target_channel.name} by {interaction.user}")
-                
-            except discord.Forbidden:
-                embed = EmbedFactory.create_error_embed(
-                    "Permission Error",
-                    "❌ I don't have permission to delete messages in this channel."
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            except discord.HTTPException as e:
-                embed = EmbedFactory.create_error_embed(
-                    "Purge Failed",
-                    f"❌ Failed to purge messages: {str(e)}"
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-    
-    @app_commands.command(name="purge-user", description="Delete all recent messages from a specific user")
-    @app_commands.describe(
-        user="User whose messages to delete",
-        amount="Number of messages to check (1-100, default: 50)",
-        channel="Channel to purge from (default: current channel)"
-    )
-    @app_commands.default_permissions(manage_messages=True)
-    async def purge_user(
-        self,
-        interaction: discord.Interaction,
-        user: discord.Member,
-        amount: app_commands.Range[int, 1, 100] = 50,
-        channel: Optional[discord.TextChannel] = None
-    ):
-        """Convenient command to purge messages from a specific user"""
-        
-        # Call the main purge command with user filter
-        await self.purge(interaction, amount, user=user, channel=channel)
-    
-    @app_commands.command(name="purge-bots", description="Delete all recent messages from bots")
-    @app_commands.describe(
-        amount="Number of messages to check (1-100, default: 50)",
-        channel="Channel to purge from (default: current channel)"
-    )
-    @app_commands.default_permissions(manage_messages=True)
-    async def purge_bots(
-        self,
-        interaction: discord.Interaction,
-        amount: app_commands.Range[int, 1, 100] = 50,
-        channel: Optional[discord.TextChannel] = None
-    ):
-        """Delete all recent bot messages"""
-        
-        target_channel = channel or interaction.channel
-        
-        # Check permissions
-        bot_permissions = target_channel.permissions_for(interaction.guild.me)
-        if not bot_permissions.manage_messages or not bot_permissions.read_message_history:
-            await interaction.response.send_message(
-                "❌ I don't have permission to manage messages in that channel.",
-                ephemeral=True
-            )
-            return
-        
-        user_permissions = target_channel.permissions_for(interaction.user)
-        if not user_permissions.manage_messages:
-            await interaction.response.send_message(
-                "❌ You don't have permission to manage messages in that channel.",
-                ephemeral=True
-            )
-            return
-        
-        def bot_check(message):
-            return message.author.bot and not message.pinned and \
-                   datetime.utcnow() - message.created_at < timedelta(days=14)
-        
-        await interaction.response.defer(ephemeral=True)
-        
-        try:
-            deleted_messages = await target_channel.purge(
-                limit=amount,
-                check=bot_check,
-                bulk=True
-            )
-            
-            embed = EmbedFactory.create_success_embed(
-                "Bot Messages Purged",
-                f"✅ Deleted **{len(deleted_messages)}** bot messages from {target_channel.mention}"
-            )
-            embed.add_field(name="Requested by", value=interaction.user.mention, inline=True)
-            embed.add_field(name="Messages Checked", value=str(amount), inline=True)
-            
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            
-            logger.info(f"Purged {len(deleted_messages)} bot messages from {target_channel.name} by {interaction.user}")
-            
-        except Exception as e:
-            embed = EmbedFactory.create_error_embed(
-                "Purge Failed",
-                f"❌ Failed to purge bot messages: {str(e)}"
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-    
-    @app_commands.command(name="clear-channel", description="Delete ALL messages in a channel (DANGEROUS)")
-    @app_commands.describe(
-        channel="Channel to completely clear (default: current channel)",
-        confirm_text="Type 'DELETE ALL' to confirm this dangerous action"
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def clear_channel(
-        self,
-        interaction: discord.Interaction,
-        channel: Optional[discord.TextChannel] = None,
-        confirm_text: str = ""
-    ):
-        """Completely clear a channel - requires admin permissions and confirmation"""
-        
-        target_channel = channel or interaction.channel
-        
-        # Require exact confirmation text
-        if confirm_text != "DELETE ALL":
-            embed = EmbedFactory.create_warning_embed(
-                "Confirmation Required",
-                f"⚠️ To clear **ALL** messages from {target_channel.mention}, "
-                "you must type exactly `DELETE ALL` in the confirm_text parameter.\n\n"
-                "**This will delete EVERY message in the channel!**"
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-        
-        # Check permissions
-        bot_permissions = target_channel.permissions_for(interaction.guild.me)
-        if not bot_permissions.manage_messages or not bot_permissions.read_message_history:
-            await interaction.response.send_message(
-                "❌ I don't have permission to manage messages in that channel.",
-                ephemeral=True
-            )
-            return
-        
-        embed = EmbedFactory.create_warning_embed(
-            "Confirm Channel Clearing",
-            f"🚨 **DANGER**: You are about to delete **ALL** messages from {target_channel.mention}\n\n"
-            "This action is **IRREVERSIBLE** and will delete:\n"
-            "• All message history\n"
-            "• All attachments\n"
-            "• All embeds\n"
-            "• Everything in the channel"
-        )
-        embed.set_footer(text="This action requires administrator permissions and cannot be undone!")
-        
-        # Create a special confirmation view for this dangerous action
-        class ClearChannelView(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=30)
-                self.confirmed = False
-            
-            @discord.ui.button(label="YES, DELETE EVERYTHING", style=discord.ButtonStyle.danger)
-            async def confirm_clear(self, interaction: discord.Interaction, button: discord.ui.Button):
-                self.confirmed = True
-                self.stop()
-                
-                await interaction.response.edit_message(
-                    content="🗑️ Clearing channel... This may take a while...",
-                    embed=None,
-                    view=None
-                )
-                
-                try:
-                    # Delete messages in batches
-                    deleted_count = 0
-                    while True:
-                        messages = []
-                        async for message in target_channel.history(limit=100):
-                            if datetime.utcnow() - message.created_at < timedelta(days=14):
-                                messages.append(message)
-                        
-                        if not messages:
-                            break
-                        
-                        await target_channel.delete_messages(messages)
-                        deleted_count += len(messages)
-                        
-                        if len(messages) < 100:
-                            break
-                    
-                    # Handle old messages (>14 days) individually
-                    old_messages = []
-                    async for message in target_channel.history(limit=None):
-                        old_messages.append(message)
-                    
-                    for message in old_messages:
-                        try:
-                            await message.delete()
-                            deleted_count += 1
-                        except:
-                            continue
-                    
-                    success_embed = EmbedFactory.create_success_embed(
-                        "Channel Cleared",
-                        f"✅ Successfully cleared {target_channel.mention}\n"
-                        f"**Total messages deleted:** {deleted_count}"
-                    )
-                    success_embed.add_field(name="Cleared by", value=interaction.user.mention, inline=True)
-                    success_embed.add_field(name="Timestamp", value=f"<t:{int(datetime.now().timestamp())}:F>", inline=True)
-                    
-                    await interaction.edit_original_response(embed=success_embed)
-                    
-                    logger.warning(f"CHANNEL CLEARED: {target_channel.name} by {interaction.user} - {deleted_count} messages deleted")
-                    
-                except Exception as e:
-                    error_embed = EmbedFactory.create_error_embed(
-                        "Clear Failed",
-                        f"❌ Failed to clear channel: {str(e)}"
-                    )
-                    await interaction.edit_original_response(embed=error_embed)
-            
-            @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-            async def cancel_clear(self, interaction: discord.Interaction, button: discord.ui.Button):
-                self.confirmed = False
-                self.stop()
-                
-                cancel_embed = EmbedFactory.create_info_embed(
-                    "Channel Clear Cancelled",
-                    "❌ Channel clearing has been cancelled. No messages were deleted."
-                )
-                await interaction.response.edit_message(embed=cancel_embed, view=None)
-        
-        view = ClearChannelView()
+        # Always show confirmation for safety
+        view = ClearConfirmView(clear_data)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        
+        # Wait for confirmation with timeout
+        timed_out = await view.wait()
+        
+        if timed_out or not view.confirmed:
+            # User didn't confirm or timed out
+            timeout_embed = EmbedFactory.create_info_embed(
+                "Clear Cancelled" if not timed_out else "Clear Timed Out",
+                "❌ Message clearing cancelled. No messages were deleted." if not timed_out else "❌ Clear confirmation timed out. No messages were deleted."
+            )
+            try:
+                await interaction.edit_original_response(embed=timeout_embed, view=None)
+            except discord.NotFound:
+                # Message was already edited/deleted
+                pass
 
 async def setup(bot):
     await bot.add_cog(Moderation(bot))
