@@ -20,7 +20,7 @@ load_dotenv()
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
 
-class ClickUpBot(commands.Bot):
+class CalendarBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -118,7 +118,7 @@ class ClickUpBot(commands.Bot):
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name="ClickUp tasks"
+                name="Google Calendar"
             )
         )
     
@@ -146,32 +146,22 @@ class ClickUpBot(commands.Bot):
         
         # Create the welcome embed
         embed = discord.Embed(
-            title="🎉 Welcome to ClickBot!",
-            description="Thank you for adding ClickBot to your server! Let's get you set up in just a few minutes.",
+            title="🎉 Welcome to CalendarBot!",
+            description="Thank you for adding CalendarBot to your server! Let's get you set up in just a few minutes.",
             color=discord.Color.blue()
         )
         
         embed.add_field(
-            name="📋 Step 1: Connect ClickUp (Required)",
-            value="1. Run `/clickup-setup`\n"
-                  "2. Click **🔐 Login with ClickUp**\n"
-                  "3. Sign in and select your workspaces\n"
+            name="📋 Step 1: Connect Google Calendar (Required)",
+            value="1. Run `/calendar-setup`\n"
+                  "2. Click **🔐 Login with Google**\n"
+                  "3. Sign in and authorize calendar access\n"
                   "4. You'll be redirected back here",
             inline=False
         )
         
         embed.add_field(
-            name="🔑 Step 2: Add Personal API Token (Required for Full Access)",
-            value="Due to ClickUp's OAuth limitations, you need a personal token for task operations:\n"
-                  "1. Go to [ClickUp Settings > Apps](https://app.clickup.com/settings/apps)\n"
-                  "2. Find **Personal API Token** and click **Generate**\n"
-                  "3. Copy the token (starts with `pk_`)\n"
-                  "4. Run `/workspace-add-token` and paste it",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="🤖 Step 3: Enable AI Features (Optional)",
+            name="🤖 Step 2: Enable AI Features (Optional)",
             value="For AI-powered task management:\n"
                   "1. Get a Claude API key from [Anthropic](https://console.anthropic.com/)\n"
                   "2. Run `/claude-setup` and enter your key\n"
@@ -182,16 +172,16 @@ class ClickUpBot(commands.Bot):
         embed.add_field(
             name="✅ Quick Test",
             value="After setup, try these commands:\n"
-                  "• `/task-create` - Create your first task\n"
-                  "• `/calendar` - View tasks in calendar\n"
+                  "• `/calendar` - View your Google Calendar\n"
+                  "• `/calendar-events` - List upcoming events\n"
                   "• `/help` - See all available commands",
             inline=False
         )
         
         embed.add_field(
             name="⚠️ Important Note",
-            value="Without a personal API token, you'll see **'Team(s) not authorized'** errors. "
-                  "This is a ClickUp limitation - the personal token provides full access to your spaces and tasks.",
+            value="Make sure to grant calendar read permissions when authorizing. "
+                  "Without proper permissions, the bot won't be able to display your calendar events.",
             inline=False
         )
         
@@ -202,11 +192,11 @@ class ClickUpBot(commands.Bot):
             def __init__(self):
                 super().__init__(timeout=None)
                 
-                # Add ClickUp setup button
+                # Add Google Calendar button
                 self.add_item(discord.ui.Button(
-                    label="ClickUp Settings",
-                    url="https://app.clickup.com/settings/apps",
-                    emoji="🔗"
+                    label="Google Calendar",
+                    url="https://calendar.google.com",
+                    emoji="📅"
                 ))
         
         try:
@@ -292,7 +282,7 @@ def signal_handler(sig, frame):
 
 async def main():
     global bot
-    bot = ClickUpBot()
+    bot = CalendarBot()
     
     # Setup signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)

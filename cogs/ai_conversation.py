@@ -5,41 +5,23 @@ from typing import Optional, Dict, List
 import json
 import asyncio
 from datetime import datetime, timedelta
-from services.clickup_api import ClickUpAPI
+# from services.clickup_api import ClickUpAPI  # Removed ClickUp dependency
 from services.claude_api import ClaudeAPI
-from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
+# from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository  # Removed ClickUp dependency
 from repositories.claude_config import ClaudeConfigRepository
 from utils.embed_factory import EmbedFactory
 from loguru import logger
 
 class AIConversation(commands.Cog):
-    """AI conversation mode for complex ClickUp operations"""
+    """AI conversation mode with Claude functionality (ClickUp operations disabled)"""
     
     def __init__(self, bot):
         self.bot = bot
         self.active_conversations = {}  # guild_id -> {user_id: conversation_data}
     
-    @app_commands.command(name="ai-chat", description="Start an AI conversation for complex ClickUp operations")
+    @app_commands.command(name="ai-chat", description="Start an AI conversation with Claude (ClickUp operations disabled)")
     async def ai_chat(self, interaction: discord.Interaction):
-        """Start a conversational AI session"""
-        
-        # Check configuration using workspace repository
-        from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
-        
-        # Get default workspace and API
-        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
-        if not default_workspace:
-            clickup_api = None
-        else:
-            token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
-            clickup_api = ClickUpAPI(token) if token else None
-        if not clickup_api:
-            embed = EmbedFactory.create_error_embed(
-                "Not Configured",
-                "ClickUp hasn't been set up yet. Use `/clickup-setup` first."
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+        """Start a conversational AI session with Claude only"""
         
         config = await ClaudeConfigRepository.get_config(interaction.guild_id)
         if not config:
@@ -54,38 +36,31 @@ class AIConversation(commands.Cog):
         if interaction.guild_id not in self.active_conversations:
             self.active_conversations[interaction.guild_id] = {}
         
-        # Get workspace information
-        try:
-            workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(interaction.guild_id)
-            workspace_id = workspace.workspace_id if workspace else None
-        except Exception as e:
-            logger.error(f"Error getting workspace: {e}")
-            workspace_id = None
-        
         self.active_conversations[interaction.guild_id][interaction.user.id] = {
             'started_at': datetime.now(),
             'context': [],
-            'workspace_id': workspace_id
+            'workspace_id': None  # No ClickUp workspace
         }
         
         embed = EmbedFactory.create_info_embed(
             "🤖 AI Chat Mode Active",
-            "I'm ready to help with your ClickUp tasks! You can ask me to:\n\n"
-            "• Create, update, or delete tasks\n"
-            "• Find and filter tasks\n"
-            "• Move tasks between lists\n"
-            "• Generate reports\n"
-            "• Plan and organize work\n"
+            "I'm ready to help you with general AI assistance! You can ask me to:\n\n"
+            "• Answer questions and provide information\n"
+            "• Help with writing and editing\n"
+            "• Explain concepts and topics\n"
+            "• Provide suggestions and advice\n"
+            "• Generate creative content\n"
             "• And much more!\n\n"
+            "**Note:** ClickUp task management features have been disabled.\n\n"
             "Type your requests naturally. Say 'exit' to end the conversation."
         )
         
         embed.add_field(
             name="Examples",
-            value="• 'Create a new feature task for the login system'\n"
-                  "• 'Show me all high priority bugs'\n"
-                  "• 'Move all completed tasks to the archive list'\n"
-                  "• 'What tasks are due this week?'",
+            value="• 'Help me write a professional email'\n"
+                  "• 'Explain how machine learning works'\n"
+                  "• 'Give me some creative writing prompts'\n"
+                  "• 'What are best practices for project management?'",
             inline=False
         )
         
@@ -121,19 +96,7 @@ class AIConversation(commands.Cog):
             'content': message
         })
         
-        # Get APIs using workspace repository
-        from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
-        
-        default_workspace = await ClickUpOAuthWorkspaceRepository.get_default_workspace(guild_id)
-        if not default_workspace:
-            return "❌ ClickUp not configured properly."
-            
-        token = await ClickUpOAuthWorkspaceRepository.get_best_token(default_workspace)
-        if not token:
-            return "❌ ClickUp not configured properly."
-            
-        clickup_api = ClickUpAPI(token)
-        
+        # Get Claude API only (ClickUp removed)
         api_key = await ClaudeConfigRepository.get_decrypted_api_key(
             await ClaudeConfigRepository.get_config(guild_id)
         )
@@ -142,15 +105,14 @@ class AIConversation(commands.Cog):
         # Process with AI
         await interaction.response.defer()
         
-        async with clickup_api:
-            try:
-                # Build conversation context
-                context_str = "\n".join([
-                    f"{msg['role']}: {msg['content']}" 
-                    for msg in conversation['context'][-5:]  # Last 5 messages
-                ])
-                
-                prompt = f"""You are an AI assistant helping with ClickUp task management.
+        try:
+            # Build conversation context
+            context_str = "\n".join([
+                f"{msg['role']}: {msg['content']}" 
+                for msg in conversation['context'][-5:]  # Last 5 messages
+            ])
+            
+            prompt = f"""You are a helpful AI assistant.
 
 Previous conversation:
 {context_str}
@@ -160,87 +122,54 @@ Current request: {message}
 Analyze what the user wants and provide:
 1. Clear understanding of the request
 2. Any clarifying questions needed
-3. Actions you'll take
-4. Expected outcome
+3. Helpful information or suggestions
+4. Next steps if applicable
+
+Note: ClickUp task management features are not available.
 
 Respond conversationally and helpfully."""
 
-                response = await claude_api.create_message(prompt, max_tokens=1000)
-                
-                # Add AI response to context
-                conversation['context'].append({
-                    'role': 'assistant',
-                    'content': response
-                })
-                
-                # Create response embed
-                embed = EmbedFactory.create_info_embed(
-                    "🤖 AI Assistant",
-                    response[:2000]  # Discord limit
-                )
-                
-                # Add continue button
-                view = ConversationView(self, user_id, guild_id)
-                await interaction.followup.send(embed=embed, view=view)
-                
-                # Execute any detected actions
-                await self._execute_conversation_actions(
-                    interaction, clickup_api, claude_api, message, response
-                )
-                
-            except Exception as e:
-                logger.error(f"Error in AI conversation: {e}")
-                embed = EmbedFactory.create_error_embed(
-                    "Error",
-                    f"Something went wrong: {str(e)}"
-                )
-                await interaction.followup.send(embed=embed)
-    
-    async def _execute_conversation_actions(
-        self,
-        interaction: discord.Interaction,
-        clickup_api: ClickUpAPI,
-        claude_api: ClaudeAPI,
-        user_message: str,
-        ai_response: str
-    ):
-        """Execute any actions mentioned in the conversation"""
-        
-        # Analyze for actionable items
-        action_prompt = f"""Based on this conversation:
-User: {user_message}
-Assistant: {ai_response}
-
-Identify any specific actions to take with ClickUp. Return JSON:
-{{
-    "actions": [
-        {{
-            "type": "create_task|update_task|list_tasks|none",
-            "details": {{}}
-        }}
-    ],
-    "needs_confirmation": true/false
-}}"""
-
-        action_response = await claude_api.create_message(action_prompt, max_tokens=500)
-        
-        try:
-            json_start = action_response.find('{')
-            json_end = action_response.rfind('}') + 1
-            actions = json.loads(action_response[json_start:json_end])
+            response = await claude_api.create_message(prompt, max_tokens=1000)
             
-            # Execute actions
-            for action in actions.get('actions', []):
-                if action['type'] == 'create_task':
-                    # Implementation would go here
-                    pass
-                elif action['type'] == 'list_tasks':
-                    # Implementation would go here
-                    pass
-                # etc...
-                
+            # Add AI response to context
+            conversation['context'].append({
+                'role': 'assistant',
+                'content': response
+            })
+            
+            # Create response embed
+            embed = EmbedFactory.create_info_embed(
+                "🤖 AI Assistant",
+                response[:2000]  # Discord limit
+            )
+            
+            # Add continue button
+            view = ConversationView(self, user_id, guild_id)
+            await interaction.followup.send(embed=embed, view=view)
+            
+            # Note: ClickUp action execution has been disabled
+            # await self._execute_conversation_actions(
+            #     interaction, claude_api, message, response
+            # )
+            
         except Exception as e:
-            logger.debug(f"No actions to execute: {e}")
+            logger.error(f"Error in AI conversation: {e}")
+            embed = EmbedFactory.create_error_embed(
+                "Error",
+                f"Something went wrong: {str(e)}"
+            )
+            await interaction.followup.send(embed=embed)
+    
+    # async def _execute_conversation_actions(
+    #     self,
+    #     interaction: discord.Interaction,
+    #     claude_api: ClaudeAPI,
+    #     user_message: str,
+    #     ai_response: str
+    # ):
+    #     """Execute any actions mentioned in the conversation - DISABLED"""
+    #     # ClickUp action execution has been disabled due to dependency removal
+    #     pass
     
     async def end_conversation(
         self,

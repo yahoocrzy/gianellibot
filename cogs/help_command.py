@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from utils.embed_factory import EmbedFactory
-from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
+from repositories.google_oauth_repository import GoogleOAuthRepository
 from repositories.claude_config import ClaudeConfigRepository
 
 class HelpCommand(commands.Cog):
@@ -15,61 +15,59 @@ class HelpCommand(commands.Cog):
     async def help_command(self, interaction: discord.Interaction):
         """Show help information"""
         # Check configuration status
-        workspaces = await ClickUpOAuthWorkspaceRepository.get_all_workspaces(interaction.guild_id)
+        credentials = await GoogleOAuthRepository.get_all_credentials(str(interaction.guild_id))
         claude_config = await ClaudeConfigRepository.get_config(interaction.guild_id)
         
         embed = EmbedFactory.create_info_embed(
-            "🤖 ClickBot Help",
-            "Your all-in-one ClickUp integration for Discord!"
+            "🤖 CalendarBot Help",
+            "Your Google Calendar integration for Discord!"
         )
         
         # Setup status
-        setup_status = "❌ Not configured" if not workspaces else f"✅ {len(workspaces)} workspace(s)"
+        setup_status = "❌ Not connected" if not credentials else f"✅ {len(credentials)} account(s)"
         ai_status = "❌ Not configured" if not claude_config else "✅ Enabled"
         
         embed.add_field(
             name="📊 Status",
-            value=f"**ClickUp:** {setup_status}\n**Claude AI:** {ai_status}",
+            value=f"**Google Calendar:** {setup_status}\n**Claude AI:** {ai_status}",
             inline=False
         )
         
         # Getting started
-        if not workspaces:
+        if not credentials:
             embed.add_field(
                 name="🚀 Getting Started",
-                value="1. Use `/clickup-setup` to login with ClickUp\n"
-                      "2. Use `/workspace-add-token` for full access\n"
-                      "3. Use `/task-create` to create your first task\n"
-                      "4. Use `/calendar` to view tasks in a calendar",
+                value="1. Use `/calendar-setup` to connect Google Calendar\n"
+                      "2. Grant calendar read permissions\n"
+                      "3. Use `/calendar` to view your calendar\n"
+                      "4. Use `/calendar-events` to list upcoming events",
                 inline=False
             )
         
         # Core commands
         embed.add_field(
-            name="📋 Task Management",
-            value="• `/task-create` - Create tasks with dropdowns\n"
-                  "• `/task-update` - Update existing tasks\n"
-                  "• `/task-list` - View tasks from a list\n"
-                  "• `/task-delete` - Delete tasks safely",
-            inline=True
-        )
-        
-        embed.add_field(
-            name="📅 Calendar & Views",
+            name="📅 Calendar Commands",
             value="• `/calendar` - Monthly calendar view\n"
-                  "• `/upcoming` - Tasks for next N days\n"
-                  "• `/today` - All tasks due today",
+                  "• `/calendar-events` - List upcoming events\n"
+                  "• `/calendar-today` - Today's events\n"
+                  "• `/calendar-accounts` - Manage accounts",
             inline=True
         )
         
-        # Workspace commands
         embed.add_field(
-            name="🏢 Workspace Management",
-            value="• `/clickup-setup` - OAuth2 ClickUp setup\n"
-                  "• `/workspace-add` - Add workspaces\n"
-                  "• `/workspace-add-token` - Add personal token\n"
-                  "• `/workspace-list` - View workspaces\n"
-                  "• `/workspace-switch` - Change default",
+            name="🔧 Setup Commands",
+            value="• `/calendar-setup` - Connect Google Calendar\n"
+                  "• `/claude-setup` - Enable AI features\n"
+                  "• `/help` - Show this help",
+            inline=True
+        )
+        
+        # Other features
+        embed.add_field(
+            name="🎯 Other Features",
+            value="• `/team-mood-setup` - Team status system\n"
+                  "• `/reaction-roles` - Role assignment\n"
+                  "• `/config-status` - Configuration health",
             inline=True
         )
         
@@ -77,33 +75,25 @@ class HelpCommand(commands.Cog):
         if claude_config:
             embed.add_field(
                 name="🤖 AI Features",
-                value="• `/ai-create-task` - Natural language tasks\n"
-                      "• `/ai-analyze-tasks` - AI task analysis\n"
+                value="• AI conversation and assistance\n"
+                      "• Claude-powered help and analysis\n"
                       "• `/claude-settings` - Configure AI",
                 inline=True
             )
         else:
             embed.add_field(
                 name="🤖 AI Features (Not Active)",
-                value="Use `/claude-setup` to enable\nAI-powered task management",
+                value="Use `/claude-setup` to enable\nAI-powered assistance",
                 inline=True
             )
         
-        # Other features
-        embed.add_field(
-            name="🎯 Other Features",
-            value="• `/team-mood-setup` - Team status/availability system\n"
-                  "• `/purge` - Advanced message cleanup\n"
-                  "• `/config-status` - Check configuration health",
-            inline=False
-        )
         
         # Tips
         tips = [
-            "💡 **No more typing IDs!** All commands use interactive dropdowns",
-            "🔄 **Multiple workspaces** supported - switch between them easily",
+            "💡 **Interactive calendar** - Navigate months with buttons",
+            "🔄 **Multiple accounts** supported - connect different Google accounts",
             "📱 **Mobile friendly** - All features work on Discord mobile",
-            "🔑 **Full access** - Add personal API token for space/task operations"
+            "🔑 **Secure OAuth** - Uses Google's secure authentication"
         ]
         
         embed.add_field(
@@ -129,28 +119,28 @@ class HelpCommand(commands.Cog):
     async def about_command(self, interaction: discord.Interaction):
         """Show bot information"""
         embed = EmbedFactory.create_info_embed(
-            "About ClickBot",
-            "A powerful Discord bot for ClickUp integration"
+            "About CalendarBot",
+            "A powerful Discord bot for Google Calendar integration"
         )
         
         embed.add_field(
             name="Features",
-            value="• Multi-workspace support\n"
-                  "• Full dropdown selections\n"
-                  "• Calendar views\n"
-                  "• AI-powered task management\n"
+            value="• Google Calendar integration\n"
+                  "• Interactive calendar views\n"
+                  "• Event listing and display\n"
+                  "• AI-powered assistance\n"
                   "• Reaction roles\n"
-                  "• Advanced moderation",
+                  "• Team mood tracking",
             inline=True
         )
         
         embed.add_field(
             name="Technology",
             value="• Built with discord.py\n"
-                  "• ClickUp API v2 + OAuth2\n"
+                  "• Google Calendar API + OAuth2\n"
                   "• Claude AI integration\n"
                   "• PostgreSQL database\n"
-                  "• Hybrid token system",
+                  "• Secure credential storage",
             inline=True
         )
         
@@ -170,52 +160,46 @@ class HelpCommand(commands.Cog):
     async def setup_guide(self, interaction: discord.Interaction):
         """Show the complete setup guide"""
         embed = discord.Embed(
-            title="🎉 ClickBot Setup Guide",
-            description="Follow these steps to get ClickBot fully configured for your server.",
+            title="🎉 CalendarBot Setup Guide",
+            description="Follow these steps to get CalendarBot fully configured for your server.",
             color=discord.Color.blue()
         )
         
         embed.add_field(
-            name="📋 Step 1: Connect ClickUp (Required)",
-            value="1. Run `/clickup-setup`\n"
-                  "2. Click **🔐 Login with ClickUp**\n"
-                  "3. Sign in and select your workspaces\n"
+            name="📅 Step 1: Connect Google Calendar (Required)",
+            value="1. Run `/calendar-setup`\n"
+                  "2. Click **🔐 Login with Google**\n"
+                  "3. Sign in and grant calendar permissions\n"
                   "4. You'll be redirected back here",
             inline=False
         )
         
         embed.add_field(
-            name="🔑 Step 2: Add Personal API Token (Required for Full Access)",
-            value="Due to ClickUp's OAuth limitations, you need a personal token for task operations:\n"
-                  "1. Go to [ClickUp Settings > Apps](https://app.clickup.com/settings/apps)\n"
-                  "2. Find **Personal API Token** and click **Generate**\n"
-                  "3. Copy the token (starts with `pk_`)\n"
-                  "4. Run `/workspace-add-token` and paste it",
+            name="🤖 Step 2: Enable AI Features (Optional)",
+            value="For AI-powered assistance:\n"
+                  "1. Get a Claude API key from [Anthropic](https://console.anthropic.com/)\n"
+                  "2. Run `/claude-setup` and enter your key\n"
+                  "3. AI features will be enabled!",
             inline=False
         )
         
         embed.add_field(
-            name="🤖 Step 3: Enable AI Features (Optional)",
-            value="For AI-powered task management:\n"
-                  "1. Get a Claude API key from [Anthropic](https://console.anthropic.com/)\n"
-                  "2. Run `/claude-setup` and enter your key\n"
-                  "3. AI commands will be unlocked!",
             inline=False
         )
         
         embed.add_field(
             name="✅ Quick Test",
             value="After setup, try these commands:\n"
-                  "• `/task-create` - Create your first task\n"
-                  "• `/calendar` - View tasks in calendar\n"
+                  "• `/calendar` - View your Google Calendar\n"
+                  "• `/calendar-events` - List upcoming events\n"
                   "• `/help` - See all available commands",
             inline=False
         )
         
         embed.add_field(
             name="⚠️ Important Note",
-            value="Without a personal API token, you'll see **'Team(s) not authorized'** errors. "
-                  "This is a ClickUp limitation - the personal token provides full access to your spaces and tasks.",
+            value="Make sure to grant calendar read permissions during OAuth setup. "
+                  "Without proper permissions, the bot won't be able to display your calendar events.",
             inline=False
         )
         
@@ -226,11 +210,11 @@ class HelpCommand(commands.Cog):
             def __init__(self):
                 super().__init__(timeout=None)
                 
-                # Add ClickUp setup button
+                # Add Google Calendar button
                 self.add_item(discord.ui.Button(
-                    label="ClickUp Settings",
-                    url="https://app.clickup.com/settings/apps",
-                    emoji="🔗"
+                    label="Google Calendar",
+                    url="https://calendar.google.com",
+                    emoji="📅"
                 ))
         
         await interaction.response.send_message(embed=embed, view=SetupGuideView(), ephemeral=True)

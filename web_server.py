@@ -5,18 +5,19 @@ import asyncio
 import os
 from datetime import datetime
 from loguru import logger
-from services.clickup_oauth import clickup_oauth
-from repositories.clickup_oauth_workspaces import ClickUpOAuthWorkspaceRepository
+from services.google_calendar_api import GoogleCalendarAPI
+from repositories.google_oauth_repository import GoogleOAuthRepository
+import os
 
 def create_web_server(bot):
     """Create FastAPI web server for health checks and monitoring"""
-    app = FastAPI(title="ClickUp Discord Bot")
+    app = FastAPI(title="Calendar Discord Bot")
     
     @app.get("/")
     async def root():
         """Root endpoint"""
         return {
-            "name": "ClickUp Discord Bot",
+            "name": "Calendar Discord Bot",
             "status": "online",
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -90,9 +91,9 @@ def create_web_server(bot):
             "uptime": str(datetime.utcnow() - bot.start_time) if hasattr(bot, 'start_time') else "Unknown"
         }
     
-    @app.get("/auth/clickup/callback")
-    async def clickup_oauth_callback(request: Request):
-        """Handle ClickUp OAuth2 callback"""
+    @app.get("/auth/google/callback")
+    async def google_oauth_callback(request: Request):
+        """Handle Google OAuth2 callback"""
         try:
             # Get query parameters
             query_params = dict(request.query_params)
@@ -104,11 +105,11 @@ def create_web_server(bot):
                 logger.error(f"OAuth2 error: {error}")
                 return HTMLResponse(f"""
                 <html>
-                    <head><title>ClickUp Setup Failed</title></head>
+                    <head><title>Google Calendar Setup Failed</title></head>
                     <body style="font-family: Arial; text-align: center; padding: 50px;">
-                        <h1>❌ ClickUp Setup Failed</h1>
+                        <h1>❌ Google Calendar Setup Failed</h1>
                         <p>Error: {error}</p>
-                        <p>Please try again in Discord with <code>/clickup-setup</code></p>
+                        <p>Please try again in Discord with <code>/calendar-setup</code></p>
                     </body>
                 </html>
                 """, status_code=400)
@@ -117,54 +118,63 @@ def create_web_server(bot):
                 raise HTTPException(status_code=400, detail="Missing code or state parameter")
             
             # Validate state
-            validation_result = await ClickUpOAuthWorkspaceRepository.validate_oauth_state(state)
+            validation_result = await GoogleOAuthRepository.validate_oauth_state(state)
             if not validation_result:
                 raise HTTPException(status_code=400, detail="Invalid or expired state")
             
             guild_id, user_id = validation_result
             
-            # Exchange code for token
-            token_data = await clickup_oauth.exchange_code_for_token(code)
-            if not token_data:
-                raise HTTPException(status_code=400, detail="Failed to exchange code for token")
+            # Exchange code for token using Google OAuth flow
+            redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:10000/auth/google/callback")
+            flow = GoogleCalendarAPI.create_auth_flow(redirect_uri)
+            flow.fetch_token(code=code)
             
-            access_token = token_data.get('access_token')
-            if not access_token:
-                raise HTTPException(status_code=400, detail="No access token received")
+            # Get credentials
+            credentials = flow.credentials
+            if not credentials:
+                raise HTTPException(status_code=400, detail="Failed to get credentials")
             
-            # Get authorized workspaces
-            workspaces = await clickup_oauth.get_authorized_workspaces(access_token)
-            if not workspaces:
-                raise HTTPException(status_code=400, detail="No workspaces authorized")
+            # Get user info to extract email
+            from google.oauth2 import service_account
+            import google.auth.transport.requests
+            from google.auth.transport.requests import Request as GoogleRequest
+            import aiohttp
             
-            # Save workspaces
-            saved_workspaces = await ClickUpOAuthWorkspaceRepository.save_workspace_from_oauth(
-                guild_id, user_id, access_token, workspaces
+            # Get user email from Google
+            async with aiohttp.ClientSession() as session:
+                headers = {'Authorization': f'Bearer {credentials.token}'}
+                async with session.get('https://www.googleapis.com/oauth2/v1/userinfo', headers=headers) as resp:
+                    if resp.status == 200:
+                        user_info = await resp.json()
+                        email = user_info.get('email', 'Unknown')
+                    else:
+                        email = 'Unknown'
+            
+            # Save credentials
+            saved_cred = await GoogleOAuthRepository.save_credentials(
+                guild_id, user_id, email, credentials.to_json()
             )
             
-            logger.info(f"OAuth2 setup completed for guild {guild_id}, saved {len(saved_workspaces)} workspaces")
-            
-            # Return success page
-            workspace_list = "<br>".join([f"• {ws.workspace_name}" for ws in saved_workspaces])
+            logger.info(f"OAuth2 setup completed for guild {guild_id}, user {email}")
             
             return HTMLResponse(f"""
             <html>
-                <head><title>ClickUp Setup Complete</title></head>
+                <head><title>Google Calendar Setup Complete</title></head>
                 <body style="font-family: Arial; text-align: center; padding: 50px; background: #f0f8ff;">
                     <div style="max-width: 600px; margin: 0 auto; padding: 30px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        <h1 style="color: #28a745;">✅ ClickUp Setup Complete!</h1>
-                        <p style="font-size: 18px; color: #333;">Successfully connected {len(saved_workspaces)} workspace(s):</p>
+                        <h1 style="color: #28a745;">✅ Google Calendar Setup Complete!</h1>
+                        <p style="font-size: 18px; color: #333;">Successfully connected Google Calendar</p>
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                            {workspace_list}
+                            Connected account: {email}
                         </div>
                         <p style="color: #666;">You can now close this tab and return to Discord.</p>
                         <div style="margin-top: 30px; padding: 20px; background: #e8f5e8; border-radius: 5px;">
                             <h3 style="color: #155724; margin: 0 0 10px 0;">🎉 Ready to use!</h3>
                             <p style="margin: 0; color: #155724;">Try these commands in Discord:</p>
                             <ul style="text-align: left; display: inline-block; color: #155724;">
-                                <li><code>/task-create</code> - Create your first task</li>
-                                <li><code>/calendar</code> - View tasks in calendar</li>
-                                <li><code>/task-list</code> - List existing tasks</li>
+                                <li><code>/calendar</code> - View your calendar</li>
+                                <li><code>/calendar-events</code> - List upcoming events</li>
+                                <li><code>/calendar-today</code> - See today's events</li>
                             </ul>
                         </div>
                     </div>
@@ -182,16 +192,16 @@ def create_web_server(bot):
                 <body style="font-family: Arial; text-align: center; padding: 50px;">
                     <h1>❌ Setup Error</h1>
                     <p>An error occurred during setup: {str(e)}</p>
-                    <p>Please try again in Discord with <code>/clickup-setup</code></p>
+                    <p>Please try again in Discord with <code>/calendar-setup</code></p>
                 </body>
             </html>
             """, status_code=500)
     
-    @app.post("/webhook/clickup")
-    async def clickup_webhook(data: dict):
-        """Handle ClickUp webhooks"""
+    @app.post("/webhook/google")
+    async def google_webhook(data: dict):
+        """Handle Google Calendar webhooks"""
         # Process webhook data
-        logger.info(f"Received ClickUp webhook: {data}")
+        logger.info(f"Received Google webhook: {data}")
         # You can emit events to the bot here
         return {"status": "received"}
     
