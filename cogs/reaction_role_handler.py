@@ -12,22 +12,27 @@ class ReactionRoleHandler(commands.Cog):
     async def remove_other_mood_roles_and_reactions(self, member: discord.Member, new_role: discord.Role, message_id: int, channel_id: int):
         """Remove other mood roles and their corresponding reactions from the message"""
         try:
+            logger.info(f"Removing other mood roles and reactions for {member.display_name}, keeping role {new_role.name}")
+            
+            # Get team mood config to know which reactions to check
+            config = await TeamMoodRepository.get_config(member.guild.id)
+            if not config:
+                logger.warning(f"No team mood config found for guild {member.guild.id}")
+                return
+            
             # Remove other mood roles using the existing service method
             await TeamMoodService.remove_other_mood_roles(member, new_role)
             
             # Get the message to remove old reactions
             channel = member.guild.get_channel(channel_id)
             if not channel:
+                logger.warning(f"Channel {channel_id} not found")
                 return
             
             try:
                 message = await channel.fetch_message(message_id)
-            except (discord.NotFound, discord.Forbidden):
-                return
-            
-            # Get team mood config to know which reactions to check
-            config = await TeamMoodRepository.get_config(member.guild.id)
-            if not config:
+            except (discord.NotFound, discord.Forbidden) as e:
+                logger.warning(f"Could not fetch mood message {message_id}: {e}")
                 return
             
             # Map role IDs to their emojis
@@ -38,18 +43,28 @@ class ReactionRoleHandler(commands.Cog):
                 config.role_away_id: TeamMoodService.STATUS_EMOJIS['away']
             }
             
-            # Remove user's reactions from other mood status emojis (not the new one)
+            # Remove user's reactions from ALL mood status emojis (including the new one - they'll re-add it)
+            removed_reactions = []
             for role_id, emoji in role_emoji_map.items():
-                if role_id and role_id != new_role.id:
+                if role_id:  # Check all emojis, not just other ones
                     # Find the reaction for this emoji
                     for reaction in message.reactions:
                         if str(reaction.emoji) == emoji:
                             try:
-                                await reaction.remove(member)
-                                logger.info(f"Removed {member.display_name}'s reaction {emoji} from mood message")
+                                # Check if user has this reaction first
+                                users = [user async for user in reaction.users()]
+                                if member in users:
+                                    await reaction.remove(member)
+                                    removed_reactions.append(emoji)
+                                    logger.info(f"Removed {member.display_name}'s reaction {emoji} from mood message")
                             except (discord.Forbidden, discord.HTTPException) as e:
                                 logger.warning(f"Could not remove reaction {emoji} for {member.display_name}: {e}")
                             break
+            
+            if removed_reactions:
+                logger.info(f"Successfully removed reactions {removed_reactions} for {member.display_name}")
+            else:
+                logger.info(f"No existing mood reactions found for {member.display_name} to remove")
                             
         except Exception as e:
             logger.error(f"Error removing other mood roles and reactions: {e}")
@@ -87,33 +102,37 @@ class ReactionRoleHandler(commands.Cog):
             
             # Check if this is a team mood role for exclusive behavior
             is_mood_role = await TeamMoodService.is_team_mood_role(guild.id, role.id)
+            
+            # For mood roles, ALWAYS remove other reactions and roles first (even if they already have this role)
             if is_mood_role:
-                # Remove other mood roles first and their reactions
+                logger.info(f"Processing mood role {role.name} - removing other mood reactions and roles")
                 await self.remove_other_mood_roles_and_reactions(member, role, payload.message_id, payload.channel_id)
             
-            # Add the role
+            # Add the role (only if they don't already have it)
             if role not in member.roles:
                 try:
                     await member.add_roles(role, reason="Reaction role assignment")
                     logger.info(f"Added role {role.name} to {member.display_name} in {guild.name}")
-                    
-                    # Update nickname with status emoji if this is a mood role
-                    if is_mood_role:
-                        logger.info(f"Role {role.name} is a team mood role, updating nickname for {member.display_name}")
-                        config = await TeamMoodRepository.get_config(guild.id)
-                        if config:
-                            emoji = TeamMoodService.get_emoji_for_role(role.id, config)
-                            logger.info(f"Got emoji '{emoji}' for role {role.name}")
-                            await TeamMoodService.update_member_nickname(member, emoji)
-                        else:
-                            logger.warning(f"No team mood config found for guild {guild.id}")
-                    else:
-                        logger.info(f"Role {role.name} is not a team mood role, skipping nickname update")
                             
                 except discord.Forbidden:
                     logger.error(f"Missing permissions to add role {role.name} to {member.display_name}")
                 except discord.HTTPException as e:
                     logger.error(f"Failed to add role {role.name} to {member.display_name}: {e}")
+            else:
+                logger.info(f"User {member.display_name} already has role {role.name}")
+            
+            # Update nickname with status emoji if this is a mood role (always do this for mood roles)
+            if is_mood_role:
+                logger.info(f"Role {role.name} is a team mood role, updating nickname for {member.display_name}")
+                config = await TeamMoodRepository.get_config(guild.id)
+                if config:
+                    emoji = TeamMoodService.get_emoji_for_role(role.id, config)
+                    logger.info(f"Got emoji '{emoji}' for role {role.name}")
+                    await TeamMoodService.update_member_nickname(member, emoji)
+                else:
+                    logger.warning(f"No team mood config found for guild {guild.id}")
+            else:
+                logger.info(f"Role {role.name} is not a team mood role, skipping nickname update")
                     
         except Exception as e:
             logger.error(f"Error in on_raw_reaction_add: {e}")
