@@ -151,10 +151,9 @@ async def init_db():
         logger.error(f"Failed to initialize database: {e}")
         raise
 
-async def get_session() -> AsyncSession:
+def get_session():
     """Get database session"""
-    async with async_session() as session:
-        return session
+    return async_session()
 
 # Google OAuth Models
 class GoogleOAuthState(Base):
