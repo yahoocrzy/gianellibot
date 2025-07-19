@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, Integer, Boolean, DateTime, Text, JSON, BigInteger, Index
 from datetime import datetime
+from typing import Optional
 import os
 from loguru import logger
 
