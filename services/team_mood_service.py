@@ -20,13 +20,6 @@ class TeamMoodService:
         'reset': 'Clear Status'
     }
     
-    STATUS_NAMES_CLEAN = {
-        'ready': 'Ready to Work',
-        'phone': 'Phone Only',
-        'dnd': 'Do not disturb!',
-        'away': 'Need time',
-        'reset': 'Clear Status'
-    }
     
     STATUS_COLORS = {
         'ready': 0x00D166,  # Green
@@ -155,12 +148,12 @@ class TeamMoodService:
             title="Team Status Update",
             description=(
                 "**Set your current availability status:**\n\n"
-                f"{TeamMoodService.STATUS_EMOJIS['ready']} **{TeamMoodService.STATUS_NAMES_CLEAN['ready']}** - Available for tasks and collaboration\n"
-                f"{TeamMoodService.STATUS_EMOJIS['phone']} **{TeamMoodService.STATUS_NAMES_CLEAN['phone']}** - Limited availability, urgent matters only\n"
-                f"{TeamMoodService.STATUS_EMOJIS['dnd']} **{TeamMoodService.STATUS_NAMES_CLEAN['dnd']}** - Focus mode, please don't interrupt\n"
-                f"{TeamMoodService.STATUS_EMOJIS['away']} **{TeamMoodService.STATUS_NAMES_CLEAN['away']}** - Taking a break, will respond later\n\n"
+                f"{TeamMoodService.STATUS_EMOJIS['ready']} **{TeamMoodService.STATUS_NAMES['ready']}** - Available for tasks and collaboration\n"
+                f"{TeamMoodService.STATUS_EMOJIS['phone']} **{TeamMoodService.STATUS_NAMES['phone']}** - Limited availability, urgent matters only\n"
+                f"{TeamMoodService.STATUS_EMOJIS['dnd']} **{TeamMoodService.STATUS_NAMES['dnd']}** - Focus mode, please don't interrupt\n"
+                f"{TeamMoodService.STATUS_EMOJIS['away']} **{TeamMoodService.STATUS_NAMES['away']}** - Taking a break, will respond later\n\n"
                 f"**Reset your status:**\n"
-                f"{TeamMoodService.STATUS_EMOJIS['reset']} **{TeamMoodService.STATUS_NAMES_CLEAN['reset']}** - Remove all status roles and emoji\n\n"
+                f"{TeamMoodService.STATUS_EMOJIS['reset']} **{TeamMoodService.STATUS_NAMES['reset']}** - Remove all status roles and emoji\n\n"
                 "*Click any reaction to set your status. Click ❌ to reset.*"
             ),
             color=0x5865F2
