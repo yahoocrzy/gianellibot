@@ -270,35 +270,31 @@ class TeamMoodService:
             current_nick = member.display_name
             logger.info(f"Updating nickname for {member.name} (current: '{current_nick}') with emoji: {status_emoji}")
             
-            # Remove ALL existing status emojis from the end of nickname (handle stacking)
+            # Remove ALL existing status emojis from the nickname (handle stacking and placement anywhere)
             emoji_list = ['✅', '⚠️', '🛑', '💤']  # Don't include reset emoji in cleanup
             original_nick = current_nick
             
-            # Keep removing emojis until none are found (handles multiple stacked emojis)
-            removed_any = True
-            while removed_any:
-                removed_any = False
-                for emoji in emoji_list:
-                    if original_nick.endswith(' ' + emoji):
-                        original_nick = original_nick[:-2]  # Remove space and emoji
-                        logger.info(f"Removed existing emoji '{emoji}' from nickname")
-                        removed_any = True
-                        break
-                    elif original_nick.endswith(emoji):  # Handle case without space
-                        original_nick = original_nick[:-len(emoji)]
-                        logger.info(f"Removed existing emoji '{emoji}' (no space) from nickname")
-                        removed_any = True
-                        break
-            
-            # Clean up any trailing spaces
-            original_nick = original_nick.rstrip()
-            
-            # Prevent users from manually adding status emojis to their names
+            # AGGRESSIVE CLEANUP: Remove ALL status emojis from ANYWHERE in the nickname
             for emoji in emoji_list:
-                if emoji in original_nick:
-                    # Remove the emoji from anywhere in the nickname
+                # Remove from end with space
+                while original_nick.endswith(' ' + emoji):
+                    original_nick = original_nick[:-2]
+                    logger.info(f"Removed trailing emoji '{emoji}' with space from nickname")
+                
+                # Remove from end without space
+                while original_nick.endswith(emoji):
+                    original_nick = original_nick[:-len(emoji)]
+                    logger.info(f"Removed trailing emoji '{emoji}' without space from nickname")
+                
+                # Remove from anywhere in the middle
+                while emoji in original_nick:
                     original_nick = original_nick.replace(emoji, '').strip()
-                    logger.info(f"Removed manually added emoji '{emoji}' from nickname")
+                    logger.info(f"Removed emoji '{emoji}' from middle of nickname")
+            
+            # Clean up any multiple spaces and trailing spaces
+            import re
+            original_nick = re.sub(r'\s+', ' ', original_nick).strip()
+            logger.info(f"Cleaned nickname result: '{original_nick}'")
             
             # RESET NICKNAME FIRST to clear Discord cache (but only if needed)
             if member.display_name != original_nick:

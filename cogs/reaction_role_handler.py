@@ -188,6 +188,10 @@ class ReactionRoleHandler(commands.Cog):
             if is_mood_role:
                 logger.info(f"Processing mood role {role.name} - removing other mood reactions and roles")
                 await self.remove_other_mood_roles_and_reactions(member, role, payload.message_id, payload.channel_id)
+                
+                # IMPORTANT: Clear nickname first to prevent emoji stacking
+                logger.info(f"Clearing nickname before applying new status for {member.display_name}")
+                await TeamMoodService.update_member_nickname(member, None)
             
             # Add the role (only if they don't already have it)
             if role not in member.roles:
