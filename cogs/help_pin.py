@@ -383,10 +383,12 @@ class InteractiveHelpView(discord.ui.View):
         )
         
         embed.add_field(
-            name="🎭 Reaction Roles",
+            name="🎭 Team Status System",
             value=(
-                "**/reaction-roles-setup** - Create reaction role messages\n"
-                "**/reaction-roles-list** - View all reaction roles"
+                "**/team-mood-setup** - Set up team availability status system\n"
+                "**/team-mood-status** - Check current team availability\n"
+                "**/team-mood-remove** - Remove team mood system\n"
+                "**/team-mood-refresh** - Refresh the status message"
             ),
             inline=False
         )

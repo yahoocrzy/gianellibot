@@ -92,7 +92,7 @@ class HelpCommand(commands.Cog):
         # Other features
         embed.add_field(
             name="🎯 Other Features",
-            value="• `/reaction-roles-setup` - Auto role assignment\n"
+            value="• `/team-mood-setup` - Team status/availability system\n"
                   "• `/purge` - Advanced message cleanup\n"
                   "• `/config-status` - Check configuration health",
             inline=False

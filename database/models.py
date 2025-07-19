@@ -50,6 +50,21 @@ class ServerConfig(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class TeamMoodConfig(Base):
+    __tablename__ = "team_mood_config"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+    channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    role_ready_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    role_phone_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    role_dnd_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    role_away_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class ReactionRole(Base):
     __tablename__ = "reaction_roles"
     

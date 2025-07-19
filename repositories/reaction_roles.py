@@ -1,23 +1,14 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from sqlalchemy import select, delete
 from database.models import ReactionRole, async_session
-from loguru import logger
+from datetime import datetime
 
 class ReactionRoleRepository:
-    def __init__(self):
-        pass
-    
-    async def add_reaction_role(
-        self,
-        guild_id: int,
-        message_id: int,
-        channel_id: int,
-        emoji: str,
-        role_id: int,
-        exclusive: bool = False,
-        embed_color: Optional[str] = None
-    ) -> None:
-        """Add a reaction role mapping"""
+    @staticmethod
+    async def create(guild_id: int, message_id: int, channel_id: int, 
+                    emoji: str, role_id: int, exclusive: bool = False, 
+                    embed_color: Optional[str] = None) -> ReactionRole:
+        """Create a new reaction role mapping"""
         async with async_session() as session:
             reaction_role = ReactionRole(
                 guild_id=guild_id,
@@ -30,70 +21,52 @@ class ReactionRoleRepository:
             )
             session.add(reaction_role)
             await session.commit()
-            logger.info(f"Added reaction role mapping for guild {guild_id}")
+            await session.refresh(reaction_role)
+            return reaction_role
     
-    async def get_reaction_roles(self, guild_id: int) -> List[Dict[str, Any]]:
-        """Get all reaction roles for a guild"""
-        async with async_session() as session:
-            result = await session.execute(
-                select(ReactionRole).where(ReactionRole.guild_id == guild_id)
-            )
-            roles = result.scalars().all()
-            
-            return [
-                {
-                    "id": role.id,
-                    "guild_id": role.guild_id,
-                    "message_id": role.message_id,
-                    "channel_id": role.channel_id,
-                    "emoji": role.emoji,
-                    "role_id": role.role_id,
-                    "exclusive": role.exclusive,
-                    "embed_color": role.embed_color
-                }
-                for role in roles
-            ]
-    
-    async def get_reaction_role_by_message_emoji(
-        self,
-        message_id: int,
-        emoji: str
-    ) -> Optional[Dict[str, Any]]:
+    @staticmethod
+    async def get_by_message_and_emoji(guild_id: int, message_id: int, emoji: str) -> Optional[ReactionRole]:
         """Get reaction role by message and emoji"""
         async with async_session() as session:
-            result = await session.execute(
-                select(ReactionRole).where(
-                    ReactionRole.message_id == message_id,
-                    ReactionRole.emoji == emoji
-                )
+            stmt = select(ReactionRole).where(
+                ReactionRole.guild_id == guild_id,
+                ReactionRole.message_id == message_id,
+                ReactionRole.emoji == emoji
             )
-            role = result.scalar_one_or_none()
-            
-            if role:
-                return {
-                    "id": role.id,
-                    "guild_id": role.guild_id,
-                    "message_id": role.message_id,
-                    "channel_id": role.channel_id,
-                    "emoji": role.emoji,
-                    "role_id": role.role_id,
-                    "exclusive": role.exclusive,
-                    "embed_color": role.embed_color
-                }
-            return None
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
     
-    async def remove_reaction_role(self, reaction_role_id: int) -> None:
-        """Remove a reaction role mapping"""
+    @staticmethod
+    async def get_all_for_message(guild_id: int, message_id: int) -> List[ReactionRole]:
+        """Get all reaction roles for a specific message"""
         async with async_session() as session:
-            await session.execute(
-                delete(ReactionRole).where(ReactionRole.id == reaction_role_id)
+            stmt = select(ReactionRole).where(
+                ReactionRole.guild_id == guild_id,
+                ReactionRole.message_id == message_id
             )
-            await session.commit()
+            result = await session.execute(stmt)
+            return result.scalars().all()
     
-    async def remove_reaction_roles_by_message(self, message_id: int) -> None:
-        """Remove all reaction roles for a message"""
+    @staticmethod
+    async def delete_by_message(guild_id: int, message_id: int) -> bool:
+        """Delete all reaction roles for a message"""
         async with async_session() as session:
-            await session.execute(
-                delete(ReactionRole).where(ReactionRole.message_id == message_id)
+            stmt = delete(ReactionRole).where(
+                ReactionRole.guild_id == guild_id,
+                ReactionRole.message_id == message_id
             )
+            result = await session.execute(stmt)
             await session.commit()
+            return result.rowcount > 0
+    
+    @staticmethod
+    async def delete_by_role(guild_id: int, role_id: int) -> bool:
+        """Delete all reaction roles for a specific role"""
+        async with async_session() as session:
+            stmt = delete(ReactionRole).where(
+                ReactionRole.guild_id == guild_id,
+                ReactionRole.role_id == role_id
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount > 0
