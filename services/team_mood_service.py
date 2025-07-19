@@ -217,12 +217,8 @@ class TeamMoodService:
         """Update member nickname to show status emoji at the end"""
         from loguru import logger
         try:
-            # Check if we can edit this member's nickname
+            # Check if we can edit this member's nickname (role hierarchy)
             bot_member = member.guild.me
-            if member.guild.owner_id == member.id:
-                logger.warning(f"Cannot change nickname for server owner {member.name}")
-                return
-            
             if member.top_role >= bot_member.top_role:
                 logger.warning(f"Cannot change nickname for {member.name} - role hierarchy issue (user: {member.top_role.name} >= bot: {bot_member.top_role.name})")
                 return
