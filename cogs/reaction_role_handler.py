@@ -239,6 +239,12 @@ class ReactionRoleHandler(commands.Cog):
             if not member:
                 return
             
+            # Check for reset reaction removal first
+            if str(payload.emoji) == TeamMoodService.STATUS_EMOJIS['reset']:
+                logger.info(f"Processing reset reaction removal for {member.display_name}")
+                # No action needed for reset reaction removal - user just removed the reset reaction
+                return
+            
             # Check for reaction role mapping
             reaction_role = await ReactionRoleRepository.get_by_message_and_emoji(
                 guild.id, payload.message_id, str(payload.emoji)
@@ -260,7 +266,28 @@ class ReactionRoleHandler(commands.Cog):
                     
                     # Remove status emoji from nickname if this is a mood role
                     if await TeamMoodService.is_team_mood_role(guild.id, role.id):
-                        await TeamMoodService.update_member_nickname(member, None)
+                        # Check if user has any other mood roles before clearing nickname
+                        config = await TeamMoodRepository.get_config(guild.id)
+                        if config:
+                            other_mood_roles = [config.role_ready_id, config.role_phone_id, 
+                                              config.role_dnd_id, config.role_away_id]
+                            user_has_other_mood_role = False
+                            
+                            for mood_role_id in other_mood_roles:
+                                if mood_role_id and mood_role_id != role.id:
+                                    mood_role = guild.get_role(mood_role_id)
+                                    if mood_role and mood_role in member.roles:
+                                        user_has_other_mood_role = True
+                                        # Get emoji for the remaining role
+                                        remaining_emoji = TeamMoodService.get_emoji_for_role(mood_role_id, config)
+                                        await TeamMoodService.update_member_nickname(member, remaining_emoji)
+                                        logger.info(f"User still has {mood_role.name}, keeping emoji {remaining_emoji}")
+                                        break
+                            
+                            # Only clear nickname if no other mood roles
+                            if not user_has_other_mood_role:
+                                await TeamMoodService.update_member_nickname(member, None)
+                                logger.info(f"User has no other mood roles, clearing nickname completely")
                         
                 except discord.Forbidden:
                     logger.error(f"Missing permissions to remove role {role.name} from {member.display_name}")
