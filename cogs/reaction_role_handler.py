@@ -9,6 +9,51 @@ class ReactionRoleHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
+    async def remove_other_mood_roles_and_reactions(self, member: discord.Member, new_role: discord.Role, message_id: int, channel_id: int):
+        """Remove other mood roles and their corresponding reactions from the message"""
+        try:
+            # Remove other mood roles using the existing service method
+            await TeamMoodService.remove_other_mood_roles(member, new_role)
+            
+            # Get the message to remove old reactions
+            channel = member.guild.get_channel(channel_id)
+            if not channel:
+                return
+            
+            try:
+                message = await channel.fetch_message(message_id)
+            except (discord.NotFound, discord.Forbidden):
+                return
+            
+            # Get team mood config to know which reactions to check
+            config = await TeamMoodRepository.get_config(member.guild.id)
+            if not config:
+                return
+            
+            # Map role IDs to their emojis
+            role_emoji_map = {
+                config.role_ready_id: TeamMoodService.STATUS_EMOJIS['ready'],
+                config.role_phone_id: TeamMoodService.STATUS_EMOJIS['phone'],
+                config.role_dnd_id: TeamMoodService.STATUS_EMOJIS['dnd'],
+                config.role_away_id: TeamMoodService.STATUS_EMOJIS['away']
+            }
+            
+            # Remove user's reactions from other mood status emojis (not the new one)
+            for role_id, emoji in role_emoji_map.items():
+                if role_id and role_id != new_role.id:
+                    # Find the reaction for this emoji
+                    for reaction in message.reactions:
+                        if str(reaction.emoji) == emoji:
+                            try:
+                                await reaction.remove(member)
+                                logger.info(f"Removed {member.display_name}'s reaction {emoji} from mood message")
+                            except (discord.Forbidden, discord.HTTPException) as e:
+                                logger.warning(f"Could not remove reaction {emoji} for {member.display_name}: {e}")
+                            break
+                            
+        except Exception as e:
+            logger.error(f"Error removing other mood roles and reactions: {e}")
+    
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         """Handle reaction addition for role assignment"""
@@ -43,8 +88,8 @@ class ReactionRoleHandler(commands.Cog):
             # Check if this is a team mood role for exclusive behavior
             is_mood_role = await TeamMoodService.is_team_mood_role(guild.id, role.id)
             if is_mood_role:
-                # Remove other mood roles first
-                await TeamMoodService.remove_other_mood_roles(member, role)
+                # Remove other mood roles first and their reactions
+                await self.remove_other_mood_roles_and_reactions(member, role, payload.message_id, payload.channel_id)
             
             # Add the role
             if role not in member.roles:
