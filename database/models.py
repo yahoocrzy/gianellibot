@@ -59,6 +59,7 @@ class ReactionRole(Base):
     emoji: Mapped[str] = mapped_column(String(100), nullable=False)
     role_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     exclusive: Mapped[bool] = mapped_column(Boolean, default=False)
+    embed_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 class UserPreference(Base):

@@ -64,6 +64,7 @@ class ReactionRoleSetupView(discord.ui.View):
         self.roles_data = []
         self.message_title = "React for Roles"
         self.message_description = "React to this message to get roles!"
+        self.embed_color = "#0099ff"  # Default blue color
     
     @discord.ui.button(label="Set Title", style=discord.ButtonStyle.secondary)
     async def set_title(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -73,6 +74,11 @@ class ReactionRoleSetupView(discord.ui.View):
     @discord.ui.button(label="Set Description", style=discord.ButtonStyle.secondary)
     async def set_description(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = SetDescriptionModal(self)
+        await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="Set Color", style=discord.ButtonStyle.secondary)
+    async def set_color(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = SetColorModal(self)
         await interaction.response.send_modal(modal)
     
     @discord.ui.button(label="Add Role", style=discord.ButtonStyle.primary)
@@ -99,10 +105,12 @@ class ReactionRoleSetupView(discord.ui.View):
         
         try:
             # Create the reaction role message
+            # Convert hex color to discord color
+            color_int = int(self.embed_color.replace('#', ''), 16)
             embed = discord.Embed(
                 title=self.message_title,
                 description=self.message_description,
-                color=discord.Color.blue()
+                color=color_int
             )
             
             # Add role information to embed
@@ -133,7 +141,8 @@ class ReactionRoleSetupView(discord.ui.View):
                     channel_id=self.channel.id,
                     emoji=role_data['emoji'],
                     role_id=role_data['role_id'],
-                    exclusive=role_data.get('exclusive', False)
+                    exclusive=role_data.get('exclusive', False),
+                    embed_color=self.embed_color
                 )
             
             success_embed = EmbedFactory.create_success_embed(
@@ -156,7 +165,8 @@ class ReactionRoleSetupView(discord.ui.View):
             "Reaction Roles Setup",
             f"**Channel:** {self.channel.mention}\n"
             f"**Title:** {self.message_title}\n"
-            f"**Description:** {self.message_description}\n\n"
+            f"**Description:** {self.message_description}\n"
+            f"**Color:** {self.embed_color}\n\n"
             f"**Roles ({len(self.roles_data)}):**"
         )
         
@@ -211,6 +221,43 @@ class SetDescriptionModal(discord.ui.Modal, title="Set Message Description"):
     
     async def on_submit(self, interaction: discord.Interaction):
         self.setup_view.message_description = self.description_input.value
+        await self.setup_view.update_preview(interaction)
+
+class SetColorModal(discord.ui.Modal, title="Set Embed Color"):
+    def __init__(self, setup_view):
+        super().__init__()
+        self.setup_view = setup_view
+    
+    color_input = discord.ui.TextInput(
+        label="Hex Color",
+        placeholder="#FF0000 for red, #00FF00 for green, etc.",
+        default="#0099ff",
+        max_length=7,
+        min_length=7
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        color = self.color_input.value.strip()
+        
+        # Validate hex color format
+        if not color.startswith('#') or len(color) != 7:
+            await interaction.response.send_message(
+                "❌ Invalid color format. Please use hex format like #FF0000",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            # Validate it's a valid hex color
+            int(color[1:], 16)
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ Invalid hex color. Please use format like #FF0000",
+                ephemeral=True
+            )
+            return
+        
+        self.setup_view.embed_color = color
         await self.setup_view.update_preview(interaction)
 
 class AddRoleModal(discord.ui.Modal, title="Add Role Assignment"):
@@ -408,7 +455,8 @@ class ReactionRoles(commands.Cog):
                 "Reaction Roles Setup",
                 f"**Channel:** {channel.mention}\n"
                 f"**Title:** {setup_view.message_title}\n"
-                f"**Description:** {setup_view.message_description}\n\n"
+                f"**Description:** {setup_view.message_description}\n"
+                f"**Color:** {setup_view.embed_color}\n\n"
                 f"**Roles ({len(setup_view.roles_data)}):**"
             )
             embed.add_field(name="Role Assignments", value="None - Add roles using the button below", inline=False)

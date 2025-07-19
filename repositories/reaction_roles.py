@@ -14,7 +14,8 @@ class ReactionRoleRepository:
         channel_id: int,
         emoji: str,
         role_id: int,
-        exclusive: bool = False
+        exclusive: bool = False,
+        embed_color: Optional[str] = None
     ) -> None:
         """Add a reaction role mapping"""
         async with async_session() as session:
@@ -24,7 +25,8 @@ class ReactionRoleRepository:
                 channel_id=channel_id,
                 emoji=emoji,
                 role_id=role_id,
-                exclusive=exclusive
+                exclusive=exclusive,
+                embed_color=embed_color
             )
             session.add(reaction_role)
             await session.commit()
@@ -46,7 +48,8 @@ class ReactionRoleRepository:
                     "channel_id": role.channel_id,
                     "emoji": role.emoji,
                     "role_id": role.role_id,
-                    "exclusive": role.exclusive
+                    "exclusive": role.exclusive,
+                    "embed_color": role.embed_color
                 }
                 for role in roles
             ]
@@ -74,7 +77,8 @@ class ReactionRoleRepository:
                     "channel_id": role.channel_id,
                     "emoji": role.emoji,
                     "role_id": role.role_id,
-                    "exclusive": role.exclusive
+                    "exclusive": role.exclusive,
+                    "embed_color": role.embed_color
                 }
             return None
     
