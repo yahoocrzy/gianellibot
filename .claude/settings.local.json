@@ -20,7 +20,9 @@
       "Bash(test:*)",
       "WebFetch(domain:help.clickup.com)",
       "Bash(git pull:*)",
-      "WebFetch(domain:discord.com)"
+      "WebFetch(domain:discord.com)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)"
     ],
     "deny": []
   }
