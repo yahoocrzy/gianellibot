@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, delete
-from database.models import get_session, GoogleOAuthState, GoogleCredential
+from database.models import async_session, GoogleOAuthState, GoogleCredential
 from typing import Optional, Tuple
 from datetime import datetime, timedelta
 import uuid
@@ -28,7 +28,7 @@ class GoogleOAuthRepository:
         state = str(uuid.uuid4())
         expires_at = datetime.utcnow() + timedelta(minutes=10)
         
-        async with get_session() as session:
+        async with async_session() as session:
             oauth_state = GoogleOAuthState(
                 state=state,
                 guild_id=guild_id,
@@ -61,7 +61,7 @@ class GoogleOAuthRepository:
         Returns:
             Tuple of (guild_id, user_id) or None if invalid
         """
-        async with get_session() as session:
+        async with async_session() as session:
             result = await session.execute(
                 select(GoogleOAuthState).where(
                     and_(
@@ -83,7 +83,7 @@ class GoogleOAuthRepository:
     @staticmethod
     async def cleanup_expired_states():
         """Clean up expired OAuth states"""
-        async with get_session() as session:
+        async with async_session() as session:
             await session.execute(
                 delete(GoogleOAuthState).where(
                     GoogleOAuthState.expires_at <= datetime.utcnow()
@@ -111,7 +111,7 @@ class GoogleOAuthRepository:
         """
         encrypted_creds = encrypt_token(credentials_json)
         
-        async with get_session() as session:
+        async with async_session() as session:
             # Check if credentials already exist
             result = await session.execute(
                 select(GoogleCredential).where(
@@ -163,7 +163,7 @@ class GoogleOAuthRepository:
         Returns:
             GoogleCredential object or None
         """
-        async with get_session() as session:
+        async with async_session() as session:
             if user_id:
                 # Get specific user's credentials
                 result = await session.execute(
@@ -197,7 +197,7 @@ class GoogleOAuthRepository:
         Returns:
             List of GoogleCredential objects
         """
-        async with get_session() as session:
+        async with async_session() as session:
             result = await session.execute(
                 select(GoogleCredential).where(
                     GoogleCredential.guild_id == guild_id
@@ -216,14 +216,7 @@ class GoogleOAuthRepository:
         Returns:
             True if successful, False otherwise
         """
-        async with get_session() as session:
-            # First, unset all defaults
-            await session.execute(
-                select(GoogleCredential).where(
-                    GoogleCredential.guild_id == guild_id
-                ).execution_options(synchronize_session="fetch")
-            )
-            
+        async with async_session() as session:
             # Update all to not default
             result = await session.execute(
                 select(GoogleCredential).where(
@@ -262,7 +255,7 @@ class GoogleOAuthRepository:
         Returns:
             True if removed, False if not found
         """
-        async with get_session() as session:
+        async with async_session() as session:
             result = await session.execute(
                 select(GoogleCredential).where(
                     and_(
