@@ -8,7 +8,6 @@ from loguru import logger
 class ReactionRoleHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.abuse_tracker = {}  # Track abuse attempts per user
     
     async def remove_other_mood_roles_and_reactions(self, member: discord.Member, new_role: discord.Role, message_id: int, channel_id: int):
         """Remove other mood roles and their corresponding reactions from the message"""
@@ -145,38 +144,30 @@ class ReactionRoleHandler(commands.Cog):
             return
         
         try:
-            # ABUSE PROTECTION: Check if this is a team mood message and validate reaction
+            # ABUSE PROTECTION: Remove unauthorized reactions immediately
             guild = self.bot.get_guild(payload.guild_id)
             if guild:
                 config = await TeamMoodRepository.get_config(guild.id)
                 if config and payload.message_id == config.message_id:
                     # This is a team mood message - validate the reaction
                     allowed_emojis = list(TeamMoodService.STATUS_EMOJIS.values())
+                    emoji_str = str(payload.emoji)
                     
-                    if str(payload.emoji) not in allowed_emojis:
-                        # Unauthorized reaction on team mood message - remove it
+                    if emoji_str not in allowed_emojis:
+                        # Unauthorized reaction - remove it immediately
                         try:
                             channel = guild.get_channel(payload.channel_id)
-                            if channel:
-                                message = await channel.fetch_message(payload.message_id)
-                                member = guild.get_member(payload.user_id)
-                                
-                                # Find and remove the unauthorized reaction
+                            message = await channel.fetch_message(payload.message_id)
+                            member = guild.get_member(payload.user_id)
+                            
+                            if member and channel and message:
+                                # Remove unauthorized reaction
                                 for reaction in message.reactions:
-                                    if str(reaction.emoji) == str(payload.emoji):
+                                    if str(reaction.emoji) == emoji_str:
                                         await reaction.remove(member)
-                                        logger.warning(f"Removed unauthorized reaction {payload.emoji} from {member.display_name} on team mood message")
-                                        
-                                        # Track abuse attempts
-                                        user_key = f"{guild.id}_{member.id}"
-                                        self.abuse_tracker[user_key] = self.abuse_tracker.get(user_key, 0) + 1
-                                        
-                                        # Warn if repeated abuse (3+ attempts)
-                                        if self.abuse_tracker[user_key] >= 3:
-                                            logger.error(f"ABUSE ALERT: {member.display_name} ({member.id}) has attempted to add unauthorized reactions {self.abuse_tracker[user_key]} times to team mood message in {guild.name}")
-                                        
+                                        logger.warning(f"Removed unauthorized reaction {emoji_str} from {member.display_name}")
                                         break
-                        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                        except Exception as e:
                             logger.error(f"Failed to remove unauthorized reaction: {e}")
                         return  # Don't process this reaction further
             
@@ -267,36 +258,34 @@ class ReactionRoleHandler(commands.Cog):
             return
         
         try:
-            # ABUSE PROTECTION: Prevent users from removing bot's original reactions
+            # ABUSE PROTECTION: Restore bot reactions if removed
             guild = self.bot.get_guild(payload.guild_id)
             if guild:
                 config = await TeamMoodRepository.get_config(guild.id)
                 if config and payload.message_id == config.message_id:
-                    # This is a team mood message - check if this was a bot's original reaction
+                    # Check if a mood emoji was removed - restore it
                     allowed_emojis = list(TeamMoodService.STATUS_EMOJIS.values())
                     
                     if str(payload.emoji) in allowed_emojis:
-                        # Someone removed a valid mood emoji - check if bot should re-add it
                         try:
                             channel = guild.get_channel(payload.channel_id)
-                            if channel:
-                                message = await channel.fetch_message(payload.message_id)
-                                
-                                # Check if the bot still has this reaction (i.e., was it removed by a user?)
-                                bot_has_reaction = False
-                                for reaction in message.reactions:
-                                    if str(reaction.emoji) == str(payload.emoji):
-                                        users = [user async for user in reaction.users()]
-                                        if self.bot.user in users:
-                                            bot_has_reaction = True
-                                            break
-                                
-                                # If bot doesn't have the reaction, re-add it
-                                if not bot_has_reaction:
-                                    await message.add_reaction(payload.emoji)
-                                    logger.warning(f"Re-added team mood reaction {payload.emoji} that was removed")
-                        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
-                            logger.error(f"Failed to restore removed team mood reaction: {e}")
+                            message = await channel.fetch_message(payload.message_id)
+                            
+                            # Check if bot still has this reaction
+                            bot_has_reaction = False
+                            for reaction in message.reactions:
+                                if str(reaction.emoji) == str(payload.emoji):
+                                    users = [user async for user in reaction.users()]
+                                    if self.bot.user in users:
+                                        bot_has_reaction = True
+                                        break
+                            
+                            # Re-add if bot's reaction was removed
+                            if not bot_has_reaction:
+                                await message.add_reaction(payload.emoji)
+                                logger.warning(f"Restored team mood reaction {payload.emoji}")
+                        except Exception as e:
+                            logger.error(f"Failed to restore reaction: {e}")
             
             # Continue with normal reaction removal processing if guild wasn't set above
             if not guild:

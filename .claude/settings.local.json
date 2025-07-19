@@ -22,7 +22,10 @@
       "Bash(git pull:*)",
       "WebFetch(domain:discord.com)",
       "Bash(git fetch:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(git push:*)",
+      "Bash(mv:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }
