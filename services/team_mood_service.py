@@ -18,6 +18,13 @@ class TeamMoodService:
         'away': '💤 Need time'
     }
     
+    STATUS_NAMES_CLEAN = {
+        'ready': 'Ready to Work',
+        'phone': 'Phone Only',
+        'dnd': 'Do not disturb!',
+        'away': 'Need time'
+    }
+    
     STATUS_COLORS = {
         'ready': 0x00D166,  # Green
         'phone': 0xFEE75C,  # Yellow
@@ -133,10 +140,10 @@ class TeamMoodService:
             title="Team Status Update",
             description=(
                 "**Set your current availability status:**\n\n"
-                f"{TeamMoodService.STATUS_EMOJIS['ready']} **{TeamMoodService.STATUS_NAMES['ready']}** - Available for tasks and collaboration\n"
-                f"{TeamMoodService.STATUS_EMOJIS['phone']} **{TeamMoodService.STATUS_NAMES['phone']}** - Limited availability, urgent matters only\n"
-                f"{TeamMoodService.STATUS_EMOJIS['dnd']} **{TeamMoodService.STATUS_NAMES['dnd']}** - Focus mode, please don't interrupt\n"
-                f"{TeamMoodService.STATUS_EMOJIS['away']} **{TeamMoodService.STATUS_NAMES['away']}** - Taking a break, will respond later\n\n"
+                f"{TeamMoodService.STATUS_EMOJIS['ready']} **{TeamMoodService.STATUS_NAMES_CLEAN['ready']}** - Available for tasks and collaboration\n"
+                f"{TeamMoodService.STATUS_EMOJIS['phone']} **{TeamMoodService.STATUS_NAMES_CLEAN['phone']}** - Limited availability, urgent matters only\n"
+                f"{TeamMoodService.STATUS_EMOJIS['dnd']} **{TeamMoodService.STATUS_NAMES_CLEAN['dnd']}** - Focus mode, please don't interrupt\n"
+                f"{TeamMoodService.STATUS_EMOJIS['away']} **{TeamMoodService.STATUS_NAMES_CLEAN['away']}** - Taking a break, will respond later\n\n"
                 "*Click a reaction to update your status. Remove to clear.*"
             ),
             color=0x5865F2
@@ -210,6 +217,16 @@ class TeamMoodService:
         """Update member nickname to show status emoji at the end"""
         from loguru import logger
         try:
+            # Check if we can edit this member's nickname
+            bot_member = member.guild.me
+            if member.guild.owner_id == member.id:
+                logger.warning(f"Cannot change nickname for server owner {member.name}")
+                return
+            
+            if member.top_role >= bot_member.top_role:
+                logger.warning(f"Cannot change nickname for {member.name} - role hierarchy issue (user: {member.top_role.name} >= bot: {bot_member.top_role.name})")
+                return
+            
             # Get the original nickname (without any status emojis)
             current_nick = member.display_name
             logger.info(f"Updating nickname for {member.name} (current: '{current_nick}') with emoji: {status_emoji}")

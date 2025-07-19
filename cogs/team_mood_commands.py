@@ -300,6 +300,34 @@ class TeamMoodCommands(commands.Cog):
                 f"Failed to refresh team mood message: {str(e)}"
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
+    
+    @app_commands.command(name="team-mood-test-nickname", description="Test nickname functionality (Debug)")
+    @app_commands.describe(user="User to test nickname update on", emoji="Emoji to add (optional)")
+    @app_commands.default_permissions(administrator=True)
+    async def team_mood_test_nickname(self, interaction: discord.Interaction, 
+                                    user: discord.Member, emoji: str = "✅"):
+        """Test command to manually update a user's nickname with status emoji"""
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            # Test the nickname update function directly
+            await TeamMoodService.update_member_nickname(user, emoji)
+            
+            embed = EmbedFactory.create_success_embed(
+                "Nickname Test Complete",
+                f"Attempted to update {user.mention}'s nickname with emoji: {emoji}\n"
+                f"Check the bot logs for detailed results."
+            )
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            logger.error(f"Nickname test error: {e}")
+            embed = EmbedFactory.create_error_embed(
+                "Nickname Test Failed",
+                f"Error testing nickname update: {str(e)}"
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(TeamMoodCommands(bot))
