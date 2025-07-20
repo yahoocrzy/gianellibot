@@ -29,7 +29,8 @@
       "WebFetch(domain:docs.google.com)",
       "WebFetch(domain:developers.google.com)",
       "WebFetch(domain:console.cloud.google.com)",
-      "WebFetch(domain:cloud.google.com)"
+      "WebFetch(domain:cloud.google.com)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

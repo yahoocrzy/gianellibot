@@ -48,6 +48,9 @@ class ServerConfig(Base):
     
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     prefix: Mapped[str] = mapped_column(String(10), default="!")
+    # Legacy ClickUp columns - kept for compatibility but deprecated
+    clickup_workspace_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    clickup_token_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     claude_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
     config_data: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -86,12 +89,45 @@ class UserPreference(Base):
     __tablename__ = "user_preferences"
     
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # Legacy ClickUp column - kept for compatibility but deprecated
+    default_list_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     timezone: Mapped[str] = mapped_column(String(50), default="UTC")
     preferences: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+# Legacy ClickUp models - kept for database compatibility but deprecated
+class ClickUpOAuthState(Base):
+    __tablename__ = "clickup_oauth_states"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    state: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    
+    __table_args__ = (
+        Index("idx_oauth_state", "state"),
+        Index("idx_oauth_expires", "expires_at"),
+    )
 
+class ClickUpWorkspace(Base):
+    __tablename__ = "clickup_workspaces"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    workspace_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    token_type: Mapped[str] = mapped_column(String(50), default="Bearer")
+    personal_api_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    added_by_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    authorized_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class ClaudeConfig(Base):
     __tablename__ = "claude_configs"

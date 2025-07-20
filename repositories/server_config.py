@@ -19,6 +19,8 @@ class ServerConfigRepository:
                 return {
                     "guild_id": config.guild_id,
                     "prefix": config.prefix,
+                    "clickup_workspace_id": config.clickup_workspace_id,
+                    "clickup_token_encrypted": config.clickup_token_encrypted,
                     "claude_enabled": config.claude_enabled,
                     "setup_complete": config.setup_complete,
                     "config_data": config.config_data
@@ -28,6 +30,8 @@ class ServerConfigRepository:
     async def save_config(
         self,
         guild_id: int,
+        encrypted_token: str = None,
+        workspace_id: str = None,
         setup_complete: bool = True,
         **kwargs
     ) -> None:
@@ -41,6 +45,10 @@ class ServerConfigRepository:
             
             if config:
                 # Update existing
+                if encrypted_token:
+                    config.clickup_token_encrypted = encrypted_token
+                if workspace_id:
+                    config.clickup_workspace_id = workspace_id
                 config.setup_complete = setup_complete
                 if kwargs.get('config_data'):
                     config.config_data = kwargs['config_data']
@@ -48,6 +56,8 @@ class ServerConfigRepository:
                 # Create new
                 config = ServerConfig(
                     guild_id=guild_id,
+                    clickup_token_encrypted=encrypted_token,
+                    clickup_workspace_id=workspace_id,
                     setup_complete=setup_complete,
                     config_data=kwargs.get('config_data', {})
                 )
