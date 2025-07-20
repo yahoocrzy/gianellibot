@@ -30,7 +30,8 @@
       "WebFetch(domain:developers.google.com)",
       "WebFetch(domain:console.cloud.google.com)",
       "WebFetch(domain:cloud.google.com)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git rebase:*)"
     ],
     "deny": []
   }

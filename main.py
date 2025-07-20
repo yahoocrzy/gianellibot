@@ -84,8 +84,8 @@ class CalendarBot(commands.Bot):
             debug_logger.log_error(e, {"phase": "command_sync"})
             logger.error(f"Failed to sync commands: {e}")
         
-        # Start keep-alive task if web server is running
-        if self.web_server and os.getenv("WEB_SERVER_ENABLED", "true").lower() == "true":
+        # Web server is started in main() - just start keep-alive if we have a web server
+        if hasattr(self, 'web_server') and self.web_server:
             try:
                 self.keep_alive_task = asyncio.create_task(self.keep_alive_loop())
                 debug_logger.log_event("keep_alive", {"status": "started"})
@@ -293,24 +293,37 @@ async def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Start web server BEFORE attempting Discord connection
+    # Validate Discord token before attempting connection
+    discord_token = os.getenv("DISCORD_TOKEN")
+    if not discord_token:
+        logger.critical("DISCORD_TOKEN environment variable not set!")
+        return
+    
+    # Start web server IMMEDIATELY to satisfy Render port requirements
+    web_server = None
+    server_task = None
     if os.getenv("WEB_SERVER_ENABLED", "true").lower() == "true":
         try:
-            logger.info("Pre-starting web server for Render...")
+            logger.info("Starting web server for Render...")
             web_server = create_web_server(bot)
             server_task = asyncio.create_task(web_server.serve())
             logger.info(f"Web server started on port {os.getenv('PORT', 10000)}")
             
-            # Store the server task for cleanup
+            # Store web server references in bot
             bot.web_server = web_server
             bot.server_task = server_task
             
             # Give server time to bind to port
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
         except Exception as e:
-            logger.error(f"Failed to pre-start web server: {e}")
+            logger.error(f"Failed to start web server: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
+    
+    # Add longer initial delay to avoid immediate rate limiting
+    # Render IPs are being Cloudflare rate limited by Discord
+    logger.info("Waiting 5 minutes before first Discord connection attempt due to Cloudflare rate limiting...")
+    await asyncio.sleep(300)  # 5 minutes
     
     # Run bot with auto-restart on connection errors
     max_retries = 10
@@ -322,10 +335,16 @@ async def main():
                 await bot.start(os.getenv("DISCORD_TOKEN"))
         except (discord.ConnectionClosed, discord.GatewayNotFound, discord.HTTPException, ConnectionError, OSError) as e:
             retry_count += 1
-            # Check if it's a rate limit error
-            if "429" in str(e) or "rate limit" in str(e).lower():
-                wait_time = min(900, 120 * retry_count)  # Longer wait for rate limits, max 15 minutes
-                logger.error(f"Rate limited (attempt {retry_count}/{max_retries}): {e}")
+            error_str = str(e)
+            
+            # Check if it's a Cloudflare rate limit (HTML error page)
+            if "cloudflare" in error_str.lower() or "ray id:" in error_str.lower() or "<!DOCTYPE html>" in error_str:
+                wait_time = min(1800, 300 * retry_count)  # Very long wait for Cloudflare blocks, max 30 minutes
+                logger.error(f"Cloudflare rate limited (attempt {retry_count}/{max_retries})")
+                logger.error(f"IP is blocked by Discord's Cloudflare protection")
+            elif "429" in error_str or "rate limit" in error_str.lower():
+                wait_time = min(900, 120 * retry_count)  # Long wait for Discord rate limits, max 15 minutes
+                logger.error(f"Discord rate limited (attempt {retry_count}/{max_retries}): {e}")
             else:
                 wait_time = min(300, 60 * retry_count)  # Normal exponential backoff, max 5 minutes
                 logger.error(f"Connection error (attempt {retry_count}/{max_retries}): {e}")
@@ -346,6 +365,16 @@ async def main():
             else:
                 logger.critical("Max retries exceeded, shutting down")
                 break
+    
+    # Cleanup web server
+    if server_task:
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            pass
+    if web_server:
+        await web_server.shutdown()
 
 if __name__ == "__main__":
     asyncio.run(main())
