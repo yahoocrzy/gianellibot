@@ -4,7 +4,7 @@ from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from loguru import logger
 import asyncio
@@ -125,18 +125,28 @@ class GoogleCalendarAPI:
         
         # Default to next 7 days if no time specified
         if not time_min:
-            time_min = datetime.utcnow()
+            time_min = datetime.now(timezone.utc)
         if not time_max:
             time_max = time_min + timedelta(days=7)
         
         try:
+            # Convert to proper RFC3339 format for Google Calendar API
+            time_min_str = time_min.isoformat()
+            time_max_str = time_max.isoformat()
+            
+            # Add Z if timezone aware, otherwise assume UTC
+            if time_min.tzinfo is None:
+                time_min_str += 'Z'
+            if time_max.tzinfo is None:
+                time_max_str += 'Z'
+                
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 self.executor,
                 lambda: self.service.events().list(
                     calendarId=calendar_id,
-                    timeMin=time_min.isoformat() + 'Z',
-                    timeMax=time_max.isoformat() + 'Z',
+                    timeMin=time_min_str,
+                    timeMax=time_max_str,
                     maxResults=max_results,
                     singleEvents=single_events,
                     orderBy=order_by

@@ -113,7 +113,7 @@ class GoogleCalendarCommands(commands.Cog):
             return
         
         # Default to current month/year
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if not month:
             month = now.month
         if not year:
