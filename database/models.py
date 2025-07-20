@@ -31,7 +31,7 @@ else:
         pool_recycle=300
     )
 
-# Session factory
+# Session factory with improved configuration
 async_session = async_sessionmaker(
     engine, 
     class_=AsyncSession, 
@@ -158,8 +158,8 @@ async def init_db():
         raise
 
 def get_session():
-    """Get database session"""
-    return async_session()
+    """Get database session factory"""
+    return async_session
 
 # Google OAuth Models
 class GoogleOAuthState(Base):

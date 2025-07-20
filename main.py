@@ -37,6 +37,7 @@ class CalendarBot(commands.Bot):
         self.db = None
         self.web_server = None
         self.keep_alive_task = None
+        self.server_task = None
         
     async def setup_hook(self):
         """Initialize bot components"""
@@ -86,7 +87,8 @@ class CalendarBot(commands.Bot):
         if os.getenv("WEB_SERVER_ENABLED", "true").lower() == "true":
             try:
                 self.web_server = create_web_server(self)
-                asyncio.create_task(self.web_server.serve())
+                # Start web server in background without blocking
+                self.server_task = asyncio.create_task(self.web_server.serve())
                 debug_logger.log_event("web_server", {"status": "started", "port": os.getenv('PORT', 10000)})
                 
                 # Start keep-alive task to prevent Render shutdown
@@ -270,6 +272,13 @@ class CalendarBot(commands.Bot):
             except asyncio.CancelledError:
                 pass
         
+        if self.server_task:
+            self.server_task.cancel()
+            try:
+                await self.server_task
+            except asyncio.CancelledError:
+                pass
+        
         if self.web_server:
             await self.web_server.shutdown()
         await super().close()
@@ -289,7 +298,7 @@ async def main():
     signal.signal(signal.SIGTERM, signal_handler)
     
     # Run bot with auto-restart on connection errors
-    max_retries = 5
+    max_retries = 10
     retry_count = 0
     
     while retry_count < max_retries:
@@ -298,9 +307,15 @@ async def main():
                 await bot.start(os.getenv("DISCORD_TOKEN"))
         except (discord.ConnectionClosed, discord.GatewayNotFound, discord.HTTPException, ConnectionError, OSError) as e:
             retry_count += 1
-            logger.error(f"Connection error (attempt {retry_count}/{max_retries}): {e}")
+            # Check if it's a rate limit error
+            if "429" in str(e) or "rate limit" in str(e).lower():
+                wait_time = min(900, 120 * retry_count)  # Longer wait for rate limits, max 15 minutes
+                logger.error(f"Rate limited (attempt {retry_count}/{max_retries}): {e}")
+            else:
+                wait_time = min(300, 60 * retry_count)  # Normal exponential backoff, max 5 minutes
+                logger.error(f"Connection error (attempt {retry_count}/{max_retries}): {e}")
+            
             if retry_count < max_retries:
-                wait_time = min(300, 60 * retry_count)  # Exponential backoff, max 5 minutes
                 logger.info(f"Retrying in {wait_time} seconds...")
                 await asyncio.sleep(wait_time)
             else:
@@ -310,7 +325,7 @@ async def main():
             retry_count += 1
             logger.error(f"Unexpected error (attempt {retry_count}/{max_retries}): {e}")
             if retry_count < max_retries:
-                wait_time = min(300, 30 * retry_count)  # Shorter retry for other errors
+                wait_time = min(600, 60 * retry_count)  # Longer retry for unexpected errors
                 logger.info(f"Retrying in {wait_time} seconds...")
                 await asyncio.sleep(wait_time)
             else:
