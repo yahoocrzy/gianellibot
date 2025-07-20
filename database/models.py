@@ -32,7 +32,13 @@ else:
     )
 
 # Session factory
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+async_session = async_sessionmaker(
+    engine, 
+    class_=AsyncSession, 
+    expire_on_commit=False,
+    autoflush=False,
+    autocommit=False
+)
 
 class Base(DeclarativeBase):
     pass

@@ -296,7 +296,7 @@ async def main():
         try:
             async with bot:
                 await bot.start(os.getenv("DISCORD_TOKEN"))
-        except (discord.ConnectionClosed, discord.GatewayNotFound, discord.HTTPException) as e:
+        except (discord.ConnectionClosed, discord.GatewayNotFound, discord.HTTPException, ConnectionError, OSError) as e:
             retry_count += 1
             logger.error(f"Connection error (attempt {retry_count}/{max_retries}): {e}")
             if retry_count < max_retries:
@@ -307,8 +307,15 @@ async def main():
                 logger.critical("Max retries exceeded, shutting down")
                 break
         except Exception as e:
-            logger.critical(f"Unexpected error: {e}")
-            break
+            retry_count += 1
+            logger.error(f"Unexpected error (attempt {retry_count}/{max_retries}): {e}")
+            if retry_count < max_retries:
+                wait_time = min(300, 30 * retry_count)  # Shorter retry for other errors
+                logger.info(f"Retrying in {wait_time} seconds...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.critical("Max retries exceeded, shutting down")
+                break
 
 if __name__ == "__main__":
     asyncio.run(main())
