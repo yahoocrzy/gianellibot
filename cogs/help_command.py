@@ -184,9 +184,6 @@ class HelpCommand(commands.Cog):
             inline=False
         )
         
-        embed.add_field(
-            inline=False
-        )
         
         embed.add_field(
             name="✅ Quick Test",
