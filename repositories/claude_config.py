@@ -20,7 +20,7 @@ class ClaudeConfigRepository:
         """Create or update Claude configuration for a guild"""
         async with async_session() as session:
             # Encrypt the API key
-            encrypted_key = await encrypt_token(api_key)
+            encrypted_key = encrypt_token(api_key)
             
             # Check if config exists
             result = await session.execute(
@@ -77,7 +77,7 @@ class ClaudeConfigRepository:
     async def update_api_key(guild_id: int, new_api_key: str) -> bool:
         """Update the API key for a guild"""
         async with async_session() as session:
-            encrypted_key = await encrypt_token(new_api_key)
+            encrypted_key = encrypt_token(new_api_key)
             
             result = await session.execute(
                 update(ClaudeConfig)
@@ -146,7 +146,7 @@ class ClaudeConfigRepository:
     @staticmethod
     async def get_decrypted_api_key(config: ClaudeConfig) -> str:
         """Get the decrypted API key"""
-        return await decrypt_token(config.api_key_encrypted)
+        return decrypt_token(config.api_key_encrypted)
     
     @staticmethod
     async def delete_config(guild_id: int) -> bool:

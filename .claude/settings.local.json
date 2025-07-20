@@ -25,7 +25,11 @@
       "Bash(git pull:*)",
       "Bash(git push:*)",
       "Bash(mv:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:console.cloud.google.com)",
+      "WebFetch(domain:cloud.google.com)"
     ],
     "deny": []
   }
