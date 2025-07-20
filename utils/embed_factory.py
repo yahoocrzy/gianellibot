@@ -65,54 +65,6 @@ class EmbedFactory:
             EmbedFactory.COLORS["info"]
         )
     
-    @staticmethod
-    def create_task_embed(task: Dict[str, Any]) -> discord.Embed:
-        """Create embed for task display"""
-        embed = EmbedFactory.create_base_embed(
-            task.get('name', 'Untitled Task'),
-            task.get('description', 'No description'),
-            EmbedFactory.COLORS["info"]
-        )
-        
-        # Add fields
-        if task.get('status'):
-            embed.add_field(
-                name="Status",
-                value=task['status'].get('status', 'Unknown'),
-                inline=True
-            )
-        
-        if task.get('priority'):
-            priority_map = {1: "🔴 Urgent", 2: "🟠 High", 3: "🟡 Normal", 4: "⚪ Low"}
-            priority = priority_map.get(task['priority'].get('id', 4), "🟡 Normal")
-            embed.add_field(name="Priority", value=priority, inline=True)
-        
-        if task.get('due_date'):
-            due = datetime.fromtimestamp(int(task['due_date']) / 1000)
-            embed.add_field(
-                name="Due Date",
-                value=due.strftime("%Y-%m-%d %H:%M"),
-                inline=True
-            )
-        
-        if task.get('assignees'):
-            assignees = ", ".join([a.get('username', 'Unknown') for a in task['assignees']])
-            embed.add_field(name="Assignees", value=assignees or "None", inline=False)
-        
-        if task.get('tags'):
-            tags = ", ".join([t.get('name', '') for t in task['tags']])
-            embed.add_field(name="Tags", value=tags or "None", inline=False)
-        
-        if task.get('url'):
-            embed.add_field(
-                name="Link",
-                value=f"[Open in ClickUp]({task['url']})",
-                inline=False
-            )
-        
-        embed.set_footer(text=f"Task ID: {task.get('id', 'Unknown')}")
-        
-        return embed
     
     @staticmethod
     def create_list_embed(

@@ -1,15 +1,15 @@
-# ClickBot Structure Documentation
+# CalendarBot Structure Documentation
 
-This document provides a comprehensive overview of the ClickBot Discord bot architecture for Claude AI to understand the codebase structure and functionality.
+This document provides a comprehensive overview of the CalendarBot Discord bot architecture for Claude AI to understand the codebase structure and functionality.
 
 ## Project Overview
 
-ClickBot is a multi-purpose Discord bot featuring ClickUp project management integration, reaction roles, mood systems, moderation tools, and various utility features. The bot includes infrastructure for Claude AI integration but this feature is not yet fully implemented. Built using discord.py 2.4.0 with async SQLAlchemy for database operations.
+CalendarBot is a multi-purpose Discord bot featuring Google Calendar integration, reaction roles, mood systems, moderation tools, and various utility features. The bot includes infrastructure for Claude AI integration. Built using discord.py 2.4.0 with async SQLAlchemy for database operations.
 
 ## Core Architecture
 
 ### Entry Points
-- **`main.py`** - Main bot application with ClickUpBot class and event handlers
+- **`main.py`** - Main bot application with CalendarBot class and event handlers
 - **`web_server.py`** - FastAPI web server for OAuth callbacks and health checks
 - **`config.py`** - Configuration management and environment variables
 
@@ -18,8 +18,8 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
   - `ServerConfig` - Guild-specific configuration and encrypted tokens
   - `ReactionRole` - Reaction-based role assignment system
   - `UserPreference` - User-specific settings and preferences
-  - `ClickUpOAuthState` - OAuth2 state management with expiration
-  - `ClickUpWorkspace` - ClickUp workspace and token management
+  - `GoogleOAuthState` - OAuth2 state management with expiration
+  - `GoogleCredential` - Google Calendar credentials management
   - `ClaudeConfig` - Claude AI configuration per guild
   - `Cache` - Generic key-value cache with TTL
 
@@ -28,12 +28,11 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 - **`reaction_roles.py`** - Reaction roles database operations
 - **`mood_system.py`** - Mood system data management
 - **`claude_config.py`** - Claude AI configuration storage
-- **`clickup_oauth_workspaces.py`** - ClickUp workspace management
+- **`google_oauth_repository.py`** - Google Calendar OAuth management
 
 ### Business Logic Layer (`/services/`)
 - **`claude_api.py`** - Claude AI API integration and conversation management
-- **`clickup_api.py`** - ClickUp API wrapper with OAuth2 support
-- **`clickup_oauth.py`** - OAuth2 flow implementation for ClickUp
+- **`google_calendar_api.py`** - Google Calendar API wrapper with OAuth2 support
 - **`security.py`** - Encryption/decryption utilities for sensitive data
 
 ### Command Layer (`/cogs/`)
@@ -45,9 +44,8 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 - **`ai_complete_dropdown.py`** - AI completion dropdown interactions
 - **`claude_setup.py`** - Claude AI configuration and setup
 
-#### ClickUp Integration Cogs
-- **`clickup_tasks_enhanced.py`** - Enhanced ClickUp task management
-- **`workspace_management.py`** - ClickUp workspace configuration
+#### Google Calendar Integration Cogs
+- **`google_calendar_commands.py`** - Google Calendar commands and management
 
 #### Feature Cogs
 - **`reaction_roles.py`** - Reaction-based role assignment system
@@ -81,7 +79,7 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 - Automatic nickname updates with mood emojis
 - Role-based mood categorization
 
-### 3. ClickUp Integration
+### 3. Google Calendar Integration
 - OAuth2 authentication flow
 - Task creation and management
 - Workspace configuration
@@ -103,7 +101,7 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 ### Key Relationships
 - `ServerConfig` stores guild-level configuration
 - `ReactionRole` links messages to role assignments
-- `ClickUpWorkspace` manages OAuth tokens per workspace
+- `GoogleCredential` manages OAuth credentials per user
 - `ClaudeConfig` stores encrypted API keys per guild
 - `UserPreference` maintains user-specific settings
 
@@ -121,7 +119,7 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 - **Owner Commands** - Bot owner only
 
 ### Command Categories
-- **Setup Commands** - Initial configuration (`/clickup-setup`, `/claude-setup`)
+- **Setup Commands** - Initial configuration (`/google-calendar-setup`, `/claude-setup`)
 - **Management Commands** - Ongoing administration (`/workspace-add`, `/reaction-roles-setup`)
 - **User Commands** - End-user functionality (AI chat, task creation)
 - **Debug Commands** - Diagnostics and troubleshooting
@@ -131,8 +129,8 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 ### Environment Variables
 - `DATABASE_URL` - Database connection string
 - `DISCORD_TOKEN` - Bot authentication token
-- `CLICKUP_CLIENT_ID` - ClickUp OAuth client ID
-- `CLICKUP_CLIENT_SECRET` - ClickUp OAuth client secret
+- `GOOGLE_CLIENT_ID` - Google Calendar OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google Calendar OAuth client secret
 - `ENCRYPTION_KEY` - Key for sensitive data encryption
 
 ### Runtime Configuration

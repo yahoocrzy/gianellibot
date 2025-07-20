@@ -1,7 +1,7 @@
-# Claude Session Memory - ClickBot Development
+# Claude Session Memory - CalendarBot Development
 
 ## Project Overview
-ClickBot is a multi-purpose Discord bot featuring ClickUp project management integration, team mood/status system, moderation tools, and various utility features. Built using discord.py 2.4.0 with async SQLAlchemy for database operations.
+CalendarBot is a multi-purpose Discord bot featuring Google Calendar integration, team mood/status system, moderation tools, and various utility features. Built using discord.py 2.4.0 with async SQLAlchemy for database operations.
 
 ## Current Development Context
 
@@ -72,7 +72,7 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 ### Current Bot Status:
 - **Deployment**: Hosted on Render platform
 - **Database**: PostgreSQL in production, SQLite in development
-- **Features**: ClickUp integration, team mood system, moderation, mood tracking
+- **Features**: Google Calendar integration, team mood system, moderation, mood tracking
 - **Missing**: Claude AI integration (infrastructure exists but not implemented)
 
 ## Development Commands to Remember:
@@ -91,7 +91,7 @@ ClickBot is a multi-purpose Discord bot featuring ClickUp project management int
 - Team mood system fully functional with nickname display
 - All files compile successfully
 - Ready for deployment and testing
-- Next potential enhancements: ClickUp integration improvements, additional status customization
+- Next potential enhancements: Google Calendar integration improvements, additional status customization
 
 ## Note for Future Sessions:
 If continuing development, check git log for latest commits and review recent changes to understand current implementation state. The team mood system is the most recent major feature and should be fully functional.
