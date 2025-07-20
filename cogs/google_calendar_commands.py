@@ -34,6 +34,15 @@ class GoogleCalendarCommands(commands.Cog):
         """Setup Google Calendar OAuth2 connection"""
         await interaction.response.defer(ephemeral=True)
         
+        # Check if Google OAuth credentials are configured
+        if not os.getenv("GOOGLE_CLIENT_ID") or not os.getenv("GOOGLE_CLIENT_SECRET"):
+            embed = EmbedFactory.create_error_embed(
+                title="Configuration Required",
+                description="Google Calendar integration is not configured on this server. Please contact the server administrator."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
         try:
             # Create OAuth state
             state, auth_url = await GoogleOAuthRepository.create_oauth_state(
