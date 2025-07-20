@@ -38,6 +38,7 @@ class CalendarBot(commands.Bot):
         self.web_server = None
         self.keep_alive_task = None
         self.server_task = None
+        self.start_time = datetime.utcnow()  # Set start time immediately
         
     async def setup_hook(self):
         """Initialize bot components"""
@@ -83,20 +84,15 @@ class CalendarBot(commands.Bot):
             debug_logger.log_error(e, {"phase": "command_sync"})
             logger.error(f"Failed to sync commands: {e}")
         
-        # Start web server for Render keep-alive
-        if os.getenv("WEB_SERVER_ENABLED", "true").lower() == "true":
+        # Start keep-alive task if web server is running
+        if self.web_server and os.getenv("WEB_SERVER_ENABLED", "true").lower() == "true":
             try:
-                self.web_server = create_web_server(self)
-                # Start web server in background without blocking
-                self.server_task = asyncio.create_task(self.web_server.serve())
-                debug_logger.log_event("web_server", {"status": "started", "port": os.getenv('PORT', 10000)})
-                
-                # Start keep-alive task to prevent Render shutdown
                 self.keep_alive_task = asyncio.create_task(self.keep_alive_loop())
                 debug_logger.log_event("keep_alive", {"status": "started"})
+                logger.info("Keep-alive task started")
             except Exception as e:
-                debug_logger.log_error(e, {"phase": "web_server_start"})
-                logger.error(f"Failed to start web server: {e}")
+                debug_logger.log_error(e, {"phase": "keep_alive_start"})
+                logger.error(f"Failed to start keep-alive task: {e}")
     
     async def on_ready(self):
         logger.info(f"Bot is ready! Logged in as {self.user}")
@@ -296,6 +292,25 @@ async def main():
     # Setup signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Start web server BEFORE attempting Discord connection
+    if os.getenv("WEB_SERVER_ENABLED", "true").lower() == "true":
+        try:
+            logger.info("Pre-starting web server for Render...")
+            web_server = create_web_server(bot)
+            server_task = asyncio.create_task(web_server.serve())
+            logger.info(f"Web server started on port {os.getenv('PORT', 10000)}")
+            
+            # Store the server task for cleanup
+            bot.web_server = web_server
+            bot.server_task = server_task
+            
+            # Give server time to bind to port
+            await asyncio.sleep(2)
+        except Exception as e:
+            logger.error(f"Failed to pre-start web server: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
     
     # Run bot with auto-restart on connection errors
     max_retries = 10
