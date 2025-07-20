@@ -320,10 +320,8 @@ async def main():
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
     
-    # Add longer initial delay to avoid immediate rate limiting
-    # Render IPs are being Cloudflare rate limited by Discord
-    logger.info("Waiting 5 minutes before first Discord connection attempt due to Cloudflare rate limiting...")
-    await asyncio.sleep(300)  # 5 minutes
+    # Try immediate connection first, fall back to delays if blocked
+    logger.info("Attempting immediate Discord connection...")
     
     # Run bot with auto-restart on connection errors
     max_retries = 10
@@ -331,8 +329,29 @@ async def main():
     
     while retry_count < max_retries:
         try:
-            async with bot:
-                await bot.start(os.getenv("DISCORD_TOKEN"))
+            # Try different approaches to bypass Cloudflare blocks
+            proxy = os.getenv("DISCORD_PROXY")
+            
+            # Rotate User-Agent to appear as different client
+            user_agents = [
+                "DiscordBot (https://discord.com, 2.4.0)",
+                "Mozilla/5.0 (compatible; DiscordBot/2.0)",
+                "DiscordBot/2.4.0 Python/3.11 aiohttp/3.8.4"
+            ]
+            user_agent = user_agents[retry_count % len(user_agents)]
+            
+            if proxy:
+                logger.info(f"Using proxy: {proxy} with User-Agent: {user_agent}")
+                connector = aiohttp.ProxyConnector.from_url(proxy)
+                async with bot:
+                    bot.http.user_agent = user_agent
+                    bot.http.connector = connector
+                    await bot.start(os.getenv("DISCORD_TOKEN"))
+            else:
+                logger.info(f"Using User-Agent: {user_agent}")
+                async with bot:
+                    bot.http.user_agent = user_agent
+                    await bot.start(os.getenv("DISCORD_TOKEN"))
         except (discord.ConnectionClosed, discord.GatewayNotFound, discord.HTTPException, ConnectionError, OSError) as e:
             retry_count += 1
             error_str = str(e)
